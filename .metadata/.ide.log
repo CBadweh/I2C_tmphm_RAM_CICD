@@ -1,1 +1,8 @@
 2025-10-24 00:32:00,329 [INFO] WebApp:190 - Connection lost
+2025-10-24 00:32:02,771 [INFO] WebAppUi:1089 - Web application message: Reloading CAD
+2025-10-24 00:32:04,606 [INFO] WebApp:187 - Connection restablished
+2025-10-24 00:32:09,027 [INFO] WebApp:190 - Connection lost
+2025-10-24 00:32:09,294 [INFO] WebApp:187 - Connection restablished
+2025-10-24 01:19:21,627 [INFO] WebAppUi:1089 - Web application message: Reloading CAD
+2025-10-24 01:19:23,127 [INFO] WebApp:190 - Connection lost
+2025-10-24 01:19:32,895 [INFO] WebApp:187 - Connection restablished
