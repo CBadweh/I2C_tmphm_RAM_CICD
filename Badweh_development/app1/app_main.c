@@ -160,6 +160,10 @@ static struct stat_dur stat_loop_dur;
 // Public (global) variables and externs
 ////////////////////////////////////////////////////////////////////////////////
 
+// Button debouncing for I2C auto test trigger
+static bool button_was_pressed = false;
+static bool test_completed = false;
+
 ////////////////////////////////////////////////////////////////////////////////
 // Public (global) functions
 ////////////////////////////////////////////////////////////////////////////////
@@ -376,6 +380,28 @@ void app_main(void)
 //        result = tmphm_run(TMPHM_INSTANCE_1);
 //        if (result < 0)
 //            INC_SAT_U16(cnts_u16[CNT_RUN_ERR]);
+
+        // Button polling for I2C auto test trigger
+        int32_t button_state = dio_get(DIN_BUTTON_1);
+        if (button_state > 0) {  // Button pressed (active low on this board)
+            if (!button_was_pressed) {
+                button_was_pressed = true;
+                test_completed = false;
+                // Button just pressed - start I2C auto test
+                printc("\n>> Button pressed - Starting I2C auto test...\n");
+            }
+            // Poll the auto test state machine only if test hasn't completed yet
+            if (!test_completed) {
+                if (i2c_run_auto_test() > 0) {
+                    printc(">> I2C auto test completed\n\n");
+                    test_completed = true;  // Mark test as done for this press
+                }
+            }
+        } else {
+            // Button released - reset for next press
+            button_was_pressed = false;
+            test_completed = false;
+        }
     }
 }
 

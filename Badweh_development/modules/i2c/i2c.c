@@ -305,6 +305,109 @@ int32_t i2c_bus_busy(enum i2c_instance_id instance_id)
    return LL_I2C_IsActiveFlag_BUSY(i2c_states[instance_id].i2c_reg_base);
 }
 
+/*
+ * AUTOMATED TEST - Run button-triggered I2C test sequence
+ * Returns: 0 = in progress, 1 = test complete
+ */
+int32_t i2c_run_auto_test(void)
+{
+    enum i2c_instance_id instance_id = I2C_INSTANCE_3;
+    static uint32_t test_state = 0;
+    static uint32_t msg_len = 0;
+    static uint8_t msg_bfr[7];
+    int32_t rc;
+
+    switch (test_state) {
+        case 0:  // Reserve
+            printc("\n=== I2C AUTO TEST START ===\n");
+            rc = i2c_reserve(instance_id);
+            if (rc == 0) {
+                printc("[1/6] Reserve: OK\n");
+                test_state = 1;
+            } else {
+                printc("[1/6] Reserve: FAIL (%ld)\n", rc);
+                test_state = 0;
+                return 1;
+            }
+            return 0;
+
+        case 1:  // Write
+            msg_bfr[0] = 0x2c;
+            msg_bfr[1] = 0x06;
+            rc = i2c_write(instance_id, 0x44, msg_bfr, 2);
+            if (rc == 0) {
+                printc("[2/6] Write started: OK\n");
+                test_state = 2;
+            } else {
+                printc("[2/6] Write: FAIL (%ld)\n", rc);
+                i2c_release(instance_id);
+                test_state = 0;
+                return 1;
+            }
+            return 0;
+
+        case 2:  // Wait for write
+            rc = i2c_get_op_status(instance_id);
+            if (rc == 0) {
+                printc("[3/6] Write complete: OK\n");
+                test_state = 3;
+            } else if (rc == MOD_ERR_OP_IN_PROG) {
+                return 0;  // Still waiting
+            } else {
+                printc("[3/6] Write status: FAIL (%ld)\n", rc);
+                i2c_release(instance_id);
+                test_state = 0;
+                return 1;
+            }
+            return 0;
+
+        case 3:  // Read
+            msg_len = 6;
+            rc = i2c_read(instance_id, 0x44, msg_bfr, msg_len);
+            if (rc == 0) {
+                printc("[4/6] Read started: OK\n");
+                test_state = 4;
+            } else {
+                printc("[4/6] Read: FAIL (%ld)\n", rc);
+                i2c_release(instance_id);
+                test_state = 0;
+                return 1;
+            }
+            return 0;
+
+        case 4:  // Wait for read
+            rc = i2c_get_op_status(instance_id);
+            if (rc == 0) {
+                printc("[5/6] Read complete: OK\n");
+                printc("  Data: ");
+                for (int32_t i = 0; i < msg_len; i++) {
+                    printc("0x%02x ", msg_bfr[i]);
+                }
+                printc("\n");
+                test_state = 5;
+            } else if (rc == MOD_ERR_OP_IN_PROG) {
+                return 0;  // Still waiting
+            } else {
+                printc("[5/6] Read status: FAIL (%ld)\n", rc);
+                i2c_release(instance_id);
+                test_state = 0;
+                return 1;
+            }
+            return 0;
+
+        case 5:  // Release
+            rc = i2c_release(instance_id);
+            printc("[6/6] Release: %s\n", rc == 0 ? "OK" : "FAIL");
+            printc("=== I2C AUTO TEST DONE ===\n\n");
+            test_state = 0;
+            return 1;
+
+        default:
+            test_state = 0;
+            return 1;
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // INTERRUPT HANDLERS - Override weak defaults from startup code
 ////////////////////////////////////////////////////////////////////////////////

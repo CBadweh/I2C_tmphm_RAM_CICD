@@ -86,4 +86,7 @@ int32_t i2c_get_op_status(enum i2c_instance_id instance_id);
 enum i2c_errors i2c_get_error(enum i2c_instance_id instance_id);
 int32_t i2c_bus_busy(enum i2c_instance_id instance_id);
 
+// Automated test (button-triggered)
+int32_t i2c_run_auto_test(void);
+
 #endif // _I2C_H_
