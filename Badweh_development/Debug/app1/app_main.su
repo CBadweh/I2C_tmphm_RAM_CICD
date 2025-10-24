@@ -1,0 +1,2 @@
+../app1/app_main.c:167:6:app_main	40	static
+../app1/app_main.c:396:16:cmd_main_status	48	static

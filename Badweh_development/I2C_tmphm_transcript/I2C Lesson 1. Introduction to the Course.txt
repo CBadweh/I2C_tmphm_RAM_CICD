@@ -1,0 +1,212 @@
+00:01 hi my name is gene schrader and this is
+00:03 i2c theory and practice on bare metal
+00:07 stm32
+00:09 after this introduction there are four
+00:11 videos and the total is about two and a
+00:14 quarter hours in length
+00:16 the course objectives are to learn about
+00:19 the i2c interface and how it works
+00:22 learn about designing an i2c driver that
+00:24 works at the register level with
+00:26 interrupts in this case for an stm32 mcu
+00:30 although this should be
+00:32 applicable to other kinds of mcus
+00:35 and finally an objective is to have
+00:37 production quality designs and code
+00:40 the course consists of three major parts
+00:43 the first part is the theory of
+00:45 operation of i2c
+00:47 the next part is an i2c driver module
+00:50 for bare metal embedded and as part of
+00:52 that we'll discuss the requirements for
+00:55 a
+00:56 minimum viable product module
+00:59 we'll talk about the driver module
+01:01 design which is based on a state machine
+01:03 the module implementation which is the
+01:05 code
+01:07 and finally a demo from the console
+01:09 where we'll use a low-cost logic
+01:12 analyzer to look at the signals on the
+01:14 wire
+01:15 and then the third part is a higher
+01:17 level module based on the
+01:20 sht31
+01:23 temperature humidity sensor and i got a
+01:26 module with this from adafruit
+01:29 this
+01:30 this part is a lot like the second part
+01:32 in that we'll go through requirements
+01:34 the driver module design which again is
+01:36 based on a state machine
+01:38 the module
+01:40 implementation and then finally a demo
+01:43 from the console
+01:46 continuing on at the end of each video
+01:49 lesson except for this one i provide a
+01:52 slide with some prompts or questions to
+01:54 encourage you to do a little thinking
+01:55 about the subject of the video i then
+01:57 have a follow-up slide for each prompt
+02:00 with my take
+02:02 now this course is a continuation of my
+02:04 youtube course
+02:06 with this long title you can read
+02:09 that introductory course included the
+02:11 development of a software infrastructure
+02:14 layer based on the super loop and module
+02:16 pattern there's a link to that course in
+02:19 the notes for this video
+02:21 so in this course i use the same module
+02:24 api that was defined in that base course
+02:26 that made this made it trivial to
+02:28 integrate the new code from this
+02:30 course
+02:31 and i also use
+02:33 some of the infrastructure modules that
+02:35 were developed in that base course and
+02:37 this is just normal layering and reuse
+02:40 of software
+02:42 so the prerequisites are
+02:44 either that base course or some similar
+02:47 level of knowledge of mcus and embedded
+02:49 programming
+02:52 the we do use stm32 cube just a little
+02:55 bit uh mainly for pin assignment of the
+02:57 i2c peripheral so don't worry if you
+02:60 haven't used it
+03:01 we'll be looking at quite a bit of c
+03:03 code
+03:04 i would say this code is similar to what
+03:07 you would see in industry and if you
+03:08 want to improve your knowledge of c this
+03:10 would be good code to read and
+03:12 understand
+03:14 finally there's not much knowledge of
+03:16 electronics needed really you just need
+03:19 to understand the concept of a high
+03:20 signal
+03:21 which in this case represents a one bit
+03:24 and a low signal which represents a zero
+03:26 bit
+03:28 here i'll tell you about the hardware
+03:30 and software i used in developing this
+03:32 course now i have to say this hardware
+03:34 setup is kind of ugly not something you
+03:37 would show a customer but it works and
+03:40 it isn't common to run i2c over wires
+03:44 like this and and these but the wires
+03:47 are reasonably short and we can get away
+03:49 with it
+03:51 i can say i've worked on projects where
+03:53 uh in the early days before we had our
+03:56 our um
+03:57 printed circuit boards we would do
+03:59 things not unlike this
+04:01 so that we could get started on the
+04:03 software
+04:05 so
+04:06 there is a nucleo board nucleo f401re
+04:10 and not surprisingly it uses an stm32
+04:12 stm32f401remcu
+04:17 there is a temperature sensor this part
+04:20 right here
+04:21 and it comes from adafruit and it uses a
+04:26 sensorian sht 31-d
+04:30 sensor chip
+04:32 then there is a logic analyzer and i
+04:34 won't read this name i think i got this
+04:37 off of amazon it's it's a very low end
+04:42 analyzer probe and it allows you to get
+04:44 started with the salia logic 2 software
+04:48 now celia makes
+04:50 logic probes that are much nicer than
+04:52 this they have more channels they
+04:54 support analog and so forth but this is
+04:57 a nice way just to get started
+05:00 and at work um i've used the celia
+05:04 probes
+05:06 so
+05:07 in terms of software all the software is
+05:09 free and
+05:11 i'll just let you read through this
+05:13 i don't think there's anything too
+05:14 surprising here
+05:16 now the last bullet here is about
+05:19 infrastructure software that actually
+05:20 runs on the
+05:22 on the mcu board
+05:24 if you want to exactly duplicate what i
+05:26 did you would need to include this
+05:28 software it's in a github repo which
+05:30 i'll show you in just a bit
+05:33 in this slide i just want to make clear
+05:35 the connections between components as
+05:38 was shown on that last slide in that
+05:40 photo
+05:41 it's pretty straightforward the sensor
+05:43 needs uh power and ground
+05:47 which i get from the nucleo board and
+05:49 then of course there are the i2c
+05:51 connections
+05:53 now the mcu supports three i2c
+05:56 interfaces and i use the third one as i
+05:59 mentioned before i chose that i2c bus
+06:02 because the i2c signals
+06:05 that i could use with it were each
+06:08 available on two separate connectors on
+06:10 the board and that was handy for
+06:12 connecting the logic analyzer probe
+06:15 but then i added the breadboard and it
+06:17 really wasn't needed after all but i
+06:19 just uh kept with using i2c the
+06:23 third instance
+06:25 now you can also see that the logic
+06:27 analyzer probe is connected to the
+06:31 two
+06:32 i2c signals as well as ground
+06:36 and of course both the nucleo board and
+06:38 the logic analyzer probe connect to my
+06:41 laptop with usb
+06:44 so that's it
+06:46 here are some final notes before getting
+06:48 started with the lessons one thing i
+06:50 found when creating this course is that
+06:53 the
+06:54 stm32mcus have at least two different
+06:56 i2c hardware implementations so the i2c
+06:59 driver i develop in this course won't
+07:01 work on all stm32 mcus
+07:05 now here are the
+07:07 github repos for this course the first
+07:10 repo is for the source code and it's
+07:12 based on the
+07:14 repo i use for the mcu base course i
+07:17 made quite a few modifications to that
+07:19 base course code in addition to adding
+07:21 the i2c stuff so i didn't want to touch
+07:24 that repo for the base course and that
+07:28 is why i just created this new repo
+07:31 the other repo is for course materials
+07:34 which for now is just copies of external
+07:36 documents i use in the course for
+07:38 example the i2c spec and the temperature
+07:42 sensor data sheet there is a readme that
+07:45 describes the documents and where i got
+07:47 them from
+07:48 links to these repos are in the notes
+07:51 for this video
+07:53 i'll also note
+07:55 that i use windows 10 as my development
+07:58 machine but the tools used like the ide
+08:02 and logic 2
+08:03 should work on other platforms like
+08:05 linux and mac os
+08:08 so if you try this course i will be
+08:11 interested in what you think and maybe
+08:13 suggestions for improvements so please
+08:16 use any of the normal youtube
+08:18 communication methods
+08:21 so that's it for the introduction in the
+08:23 first lesson we will look at i2c theory
+08:25 of operation thanks for watching

@@ -1,0 +1,3 @@
+../modules/mem/mem.c:101:9:mem_start	16	static
+../modules/mem/mem.c:128:16:cmd_mem_read	64	static
+../modules/mem/mem.c:199:16:cmd_mem_write	80	static

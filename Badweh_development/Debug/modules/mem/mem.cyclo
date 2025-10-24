@@ -1,0 +1,3 @@
+../modules/mem/mem.c:101:9:mem_start	6
+../modules/mem/mem.c:128:16:cmd_mem_read	17
+../modules/mem/mem.c:199:16:cmd_mem_write	10

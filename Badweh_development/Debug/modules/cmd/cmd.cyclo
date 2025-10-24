@@ -1,0 +1,6 @@
+../modules/cmd/cmd.c:140:9:cmd_init	1
+../modules/cmd/cmd.c:155:9:cmd_register	4
+../modules/cmd/cmd.c:178:9:cmd_execute	59
+../modules/cmd/cmd.c:422:9:cmd_parse_args	18
+../modules/cmd/cmd.c:514:20:log_level_str	2
+../modules/cmd/cmd.c:529:16:log_level_int	3

@@ -1,0 +1,5 @@
+../modules/console/console.c:105:9:console_get_def_cfg	2
+../modules/console/console.c:126:9:console_init	4
+../modules/console/console.c:146:9:console_run	12
+../modules/console/console.c:207:5:printc	5
+../modules/console/console.c:237:5:vprintc	5

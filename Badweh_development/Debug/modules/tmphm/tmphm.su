@@ -1,0 +1,9 @@
+../modules/tmphm/tmphm.c:177:9:tmphm_get_def_cfg	16	static
+../modules/tmphm/tmphm.c:201:9:tmphm_init	16	static
+../modules/tmphm/tmphm.c:219:9:tmphm_start	24	static
+../modules/tmphm/tmphm.c:259:9:tmphm_run	40	static
+../modules/tmphm/tmphm.c:372:9:tmphm_get_last_meas	32	static
+../modules/tmphm/tmphm.c:397:27:tmr_callback	24	static
+../modules/tmphm/tmphm.c:424:16:cmd_tmphm_status	64	static
+../modules/tmphm/tmphm.c:459:16:cmd_tmphm_test	88	static
+../modules/tmphm/tmphm.c:547:16:crc8	32	static
