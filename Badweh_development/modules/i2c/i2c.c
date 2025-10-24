@@ -27,6 +27,8 @@
 #include "config.h"
 #include "module.h"
 #include "tmr.h"
+#include "cmd.h"
+#include "console.h"
 #include "i2c.h"
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -95,11 +97,29 @@ static enum tmr_cb_action tmr_callback(int32_t tmr_id, uint32_t user_data);
 static void op_stop_success(struct i2c_state* st, bool set_stop);
 static void op_stop_fail(struct i2c_state* st, enum i2c_errors error);
 
+static int32_t cmd_i2c_test(int32_t argc, const char** argv);
+
 ////////////////////////////////////////////////////////////////////////////////
 // PRIVATE VARIABLES - One state per I2C instance
 ////////////////////////////////////////////////////////////////////////////////
 
 static struct i2c_state i2c_states[I2C_NUM_INSTANCES];
+
+// Data structure with console command info.
+static struct cmd_cmd_info cmds[] = {
+    {
+        .name = "test",
+        .func = cmd_i2c_test,
+        .help = "Run test, usage: i2c test [<op> [<arg>]] (enter no op/arg for help)",
+    }
+};
+
+// Data structure passed to cmd module for console interaction.
+static struct cmd_client_info cmd_info = {
+    .name = "i2c",
+    .num_cmds = 1,
+    .cmds = cmds,
+};
 
 ////////////////////////////////////////////////////////////////////////////////
 // PUBLIC API FUNCTIONS
@@ -169,6 +189,12 @@ int32_t i2c_start(enum i2c_instance_id instance_id)
     NVIC_SetPriority(I2C3_ER_IRQn,
                      NVIC_EncodePriority(NVIC_GetPriorityGrouping(),0, 0));
     NVIC_EnableIRQ(I2C3_ER_IRQn);
+
+    // Register command with console
+    int32_t result = cmd_register(&cmd_info);
+    if (result < 0) {
+        return MOD_ERR_RESOURCE;
+    }
 
     return 0;
 }
@@ -570,4 +596,159 @@ static void op_stop_fail(struct i2c_state* st, enum i2c_errors error)
     }
     
     st->state = STATE_IDLE;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Console Test Command
+////////////////////////////////////////////////////////////////////////////////
+
+/*
+ * @brief Console command function for "i2c test".
+ *
+ * @param[in] argc Number of arguments, including "i2c"
+ * @param[in] argv Argument values, including "i2c"
+ *
+ * @return 0 for success, else a "MOD_ERR" value. See code for details.
+ *
+ * Command usage: i2c test [<op> [<arg>]]
+ *
+ * Test operations (uses I2C3 only):
+ *   reserve
+ *   release
+ *   write <addr> [<bytes> ...]
+ *   read <addr> <num-bytes>
+ *   status
+ *   busy
+ *   msg
+ */
+static int32_t cmd_i2c_test(int32_t argc, const char** argv)
+{
+    struct cmd_arg_val arg_vals[8];
+    int32_t rc = 0;
+    int32_t idx;
+    
+#define MAX_MSG_LEN 7
+    static uint32_t msg_len;
+    enum i2c_instance_id instance_id = I2C_INSTANCE_3;
+    static uint8_t msg_bfr[MAX_MSG_LEN];
+
+    // Handle help case.
+    if (argc == 2) {
+        printc("I2C Test operations (using I2C3):\n");
+        printc("  reserve                    - Reserve I2C3 bus\n");
+        printc("  release                    - Release I2C3 bus\n");
+        printc("  write <addr> [<bytes> ...]  - Write to I2C3\n");
+        printc("  read <addr> <num-bytes>      - Read from I2C3\n");
+        printc("  status                     - Get operation status\n");
+        printc("  busy                       - Check if bus busy\n");
+        printc("  msg                        - Print message buffer\n");
+        printc("\nExample workflow:\n");
+        printc("  i2c test reserve              - Reserve bus\n");
+        printc("  i2c test write 0x44 0x2c 0x06 - Write to SHT31-D\n");
+        printc("  i2c test status                - Check if done\n");
+        printc("  i2c test read 0x44 6           - Read 6 bytes\n");
+        printc("  i2c test status                - Check if done\n");
+        printc("  i2c test msg                   - View data\n");
+        printc("  i2c test release               - Release bus\n");
+        return 0;
+    }
+
+    if (argc <= 2) {
+        printc("No operation specified. Try 'i2c test' for help.\n");
+        return MOD_ERR_BAD_CMD;
+    }
+
+    if (strcasecmp(argv[2], "reserve") == 0) {
+        rc = i2c_reserve(instance_id);
+        printc("Reserve result: %ld\n", rc);
+    } 
+    else if (strcasecmp(argv[2], "release") == 0) {
+        rc = i2c_release(instance_id);
+        printc("Release result: %ld\n", rc);
+    } 
+    else if (strcasecmp(argv[2], "write") == 0) {
+        if (argc < 4) {
+            printc("Usage: i2c test write <addr> [<bytes> ...]\n");
+            return MOD_ERR_BAD_CMD;
+        }
+        
+        rc = cmd_parse_args(argc-3, argv+3, "u[u[u[u[u[u]]]]]", arg_vals);
+        if (rc < 1) {
+            return MOD_ERR_BAD_CMD;
+        }
+        
+        // First arg is address, rest are data bytes
+        uint32_t addr = arg_vals[0].val.u;
+        for (idx = 1; idx < rc; idx++) {
+            msg_bfr[idx-1] = arg_vals[idx].val.u;
+        }
+        
+        rc = i2c_write(instance_id, addr, msg_bfr, rc-1);
+        printc("Write started: %ld\n", rc);
+    } 
+    else if (strcasecmp(argv[2], "read") == 0) {
+        if (argc < 5) {
+            printc("Usage: i2c test read <addr> <num-bytes>\n");
+            return MOD_ERR_BAD_CMD;
+        }
+        
+        rc = cmd_parse_args(argc-3, argv+3, "uu", arg_vals);
+        if (rc < 2) {
+            printc("Invalid command rc=%ld\n", rc);
+            return MOD_ERR_BAD_CMD;
+        }
+        
+        uint32_t addr = arg_vals[0].val.u;
+        uint32_t num_bytes = arg_vals[1].val.u;
+        
+        if (num_bytes > MAX_MSG_LEN) {
+            printc("Message length limited to %d\n", MAX_MSG_LEN);
+            return MOD_ERR_ARG;
+        }
+        
+        msg_len = num_bytes;
+        rc = i2c_read(instance_id, addr, msg_bfr, msg_len);
+        printc("Read started: %ld\n", rc);
+    } 
+    else if (strcasecmp(argv[2], "status") == 0) {
+        rc = i2c_get_op_status(instance_id);
+        enum i2c_errors err = i2c_get_error(instance_id);
+        
+        if (rc == MOD_ERR_OP_IN_PROG) {
+            printc("Status: OPERATION IN PROGRESS\n");
+        } else if (rc == 0) {
+            printc("Status: SUCCESS (error code: %d)\n", err);
+        } else {
+            printc("Status: ERROR - rc=%ld (i2c error: %d)\n", rc, err);
+        }
+        return 0;
+    } 
+    else if (strcasecmp(argv[2], "busy") == 0) {
+        rc = i2c_bus_busy(instance_id);
+        if (rc < 0) {
+            printc("Error checking bus: %ld\n", rc);
+        } else if (rc) {
+            printc("Bus is BUSY\n");
+        } else {
+            printc("Bus is IDLE\n");
+        }
+        return 0;
+    } 
+    else if (strcasecmp(argv[2], "msg") == 0) {
+        printc("Message buffer (length %lu):\n", msg_len);
+        for (idx = 0; idx < msg_len; idx++) {
+            printc("  [%ld] = 0x%02x\n", idx, msg_bfr[idx]);
+        }
+        return 0;
+    } 
+    else {
+        printc("Invalid operation '%s'\n", argv[2]);
+        return MOD_ERR_BAD_CMD;
+    }
+    
+    if (rc != 0 && rc != MOD_ERR_OP_IN_PROG) {
+        printc("Return code: %ld\n", rc);
+    }
+    
+    return 0;
 }
