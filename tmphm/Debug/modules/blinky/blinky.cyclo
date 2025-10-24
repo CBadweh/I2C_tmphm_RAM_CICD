@@ -1,0 +1,11 @@
+../modules/blinky/blinky.c:140:9:blinky_get_def_cfg	2
+../modules/blinky/blinky.c:165:9:blinky_init	3
+../modules/blinky/blinky.c:183:9:blinky_start	15
+../modules/blinky/blinky.c:220:9:blinky_set_code_blinks	1
+../modules/blinky/blinky.c:235:9:blinky_set_sep_blinks	1
+../modules/blinky/blinky.c:249:9:blinky_set_code_period	1
+../modules/blinky/blinky.c:264:9:blinky_set_sep_period	1
+../modules/blinky/blinky.c:285:16:cmd_blinky_status	1
+../modules/blinky/blinky.c:307:16:cmd_blinky_blinks	5
+../modules/blinky/blinky.c:335:6:start	3
+../modules/blinky/blinky.c:353:20:tmr_cb	26

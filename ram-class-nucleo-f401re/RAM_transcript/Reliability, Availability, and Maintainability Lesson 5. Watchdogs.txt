@@ -1,0 +1,306 @@
+in this lesson i cover watchdogs watchdogs are a key tool to ensure your embedded application is healthy and if
+your application isn't healthy a watchdog will trigger recovery action this can be important for safety or for
+availability so here's an outline of this lesson i start with an introduction
+then a small set of requirements for a watchdog module then i discuss the design of the module
+at a high level i go over the module api and then it's implementation in c
+i give a small demo of the watchdog module then i go over some prompts or questions
+and my take on them and i finish with a summary so a watchdog which is sometimes called
+a watchdog timer is a software or hardware mechanism used to detect faults
+in a software system generally they detect something isn't being done maybe something is stuck
+so the software must periodically feed the watchdog to tell it that it's alive
+and well everything's fine if the software goes too long without feeding the watchdog the watchdog will
+trigger and this means something is going wrong in the system when a software based watchdog triggers
+we can take some software-based action for example this could include saving information about the state of the
+system when the watchdog triggered or some kind of controlled shutdown of the system in this course we will be
+implementing a feature where information is saved now if a hardware based watchdog trigger
+it generally just does an immediate hardware reset of the mcu it's like boom reset
+however some hardware-based watchdogs do have the ability to issue an early warning
+interrupt before the reset so in other words when it gets close to triggering it first will issue an interrupt to give
+the software a chance to quickly do something and then a short time later it will reset the mcu some stm32 mcus have
+this feature but the one we're using doesn't so different stm32 mcus have
+hardware-based watchdogs with different features and this is beyond the early warning
+interrupt i just mentioned so one feature is the type of clock that
+drives the watchdog generally there is a trade-off between the accuracy of the
+clock and the reliability of the clock this is a mainly a hardware issue and
+the details are beyond the scope of this course another feature is whether you have a
+simple timeout or a windowed timeout a simple timeout means you just have to feed the watchdog before the time
+expires and this is what i've been discussing so far a windowed timeout is where the software must feed the
+watchdog precisely within a specified time window it can't feed it too early
+and it can't feed it too late so far i've been talking about a system that is in steady state doing its thing
+but i want to bring up system initialization just for a moment initialization tends to be a lot
+different than steady state operation and of course a system can get stuck in initialization before most of the
+infrastructure is set up and running what this means is that initialization might be handled differently in its own
+special way compared to steady state when we're talking about watchdogs and
+i'll talk about that later in this lesson so finally i want to talk about
+watchdog usage strategy this is just based on my experiences and what i have done on projects
+so the idea is to have multiple perhaps many watchdogs
+and these will have to be software based because most mcus support at most one or two hardware based watchdogs
+then each of those watchdogs ensures that some piece or pieces of critical work is being performed so for example
+perhaps the system has to read its inputs every 100 milliseconds so you have a watchdog for reading inputs and
+you only feed it when you have successfully read the inputs perhaps there's another watchdog for ensuring
+the control loop has successfully created and written an output value
+so the idea is watchdogs do more than ensure that some branch of code for
+example the main loop is being executed the main loop could be running fine but the product isn't doing its job because
+there's some data that is in a bad state now you might have a watchdog on the
+main loop that's okay and maybe a good idea but i'd argue you need more than this
+now with this strategy the usually single hardware-based watchdog
+is used to ensure that the software-based watchdogs are being processed correctly
+so it checks the checkers in a kind of hierarchy and so
+in summary i want to emphasize this key principle watchdogs are to ensure that
+critical work is being done done not simply that code is being executed
+for my embedded courses i use an architecture based on a super loop and modules so naturally i have a watchdog
+module to provide that functionality and here's a list of the basic basic requirements for that module
+first it needs to support multiple independent software based watchdogs for monitoring different parts of the system
+this is based on the watchdog usage strategy i just went over next software-based watchdogs are
+established at run time using a registration technique there are not codependencies between the watchdog
+module and modules that use watchdogs there is support
+for a single module that can register to get notification of a software-based watchdog trigger so later we'll see a
+fault module that handles the watchdog trigger event now the wa the hardware based watchdog
+should only be used as a backup when the software based watchdogs are not working correctly
+we need to support a single simple watchdog for initialization in
+other words the system has some limited amount of time to finish initialization
+now with some products you don't want don't want it stuck in an initialization loop forever so there is a requirement
+that after n consecutive failed initialization timeouts don't enable the watchdog just let it go
+now you can set end to infinity if if you don't want if you want to keep trying forever
+now after this there are common requirements for all modules one is requirements for the super loop
+environment it needs to use a standard api and of course all functions must be non-blocking in a super loop design
+and then finally there are common requirements for tests and debug this means that the module must do logging
+for example when errors occur and there must be console commands to dump state information and test operation
+so here's a conceptual view of how the watchdog module works on the left we have these green ovals
+that represent application software that is performing critical work for each one of these ovals we have an
+associated software watchdog and the application software will be
+feeding this watchdog if it successfully does its work
+now this set of software watchdogs is periodically checked say every 100
+milliseconds to verify that none have triggered in the normal case where all of these
+software watchdogs are okay the hardware watchdog will be fed so
+everyone is happy everything's working so now let's look at a normal watchdog
+fault so let's say this application software is having a problem and so it stops
+feeding its watchdog so this will be detected when the
+software watchdogs are checked periodically so
+when this triggers the watchdog module will notify the fault module and we
+expect the fault module will save some information and eventually it will reset
+the mcu and hopefully the system starts working again so that's a normal
+watchdog fault now let's look at some more interesting failure scenarios
+as the first uh failure scenario let's say this periodic checking of the
+software watchdog stops happening for some reason something got messed up this is a serious problem because our
+watchdogs are no longer being checked but if that happens then we never reach this
+condition where we determine that all the software watchdogs are okay it means we stop
+feeding the hardware watchdog and it will eventually reset the mcu
+because the watchdog system went bad and again we hope that the system
+restarts and everything starts working fine again as another scenario
+assume let's say this software has a problem it stops feeding its
+software watchdog and this software watchdog triggers and again the watchdog module notifies the
+fault module but let's say the fault module when it's doing its thing it gets stuck
+we don't want to stay stuck forever but here's what happens
+when it's stuck no one is feeding this hardware uh watchdog because we have
+stopped scanning these uh software-based watchdogs and so eventually the hardware based
+watchdog will reset the mcu and again we hope it recovers
+so this is a system of checks i hope i've covered all of the use cases and
+hopefully we have a simple and reliable design i want to say a few words about the
+initialization watchdog design because there was one part of it that was a little tricky so as i mentioned the hardware-based
+watchdog by itself is used for initialization for the case where initialization gets stuck
+now we have a requirement to stop using the watchdog after n consecutive failed initializations this is a last ditch
+effort to get the system to come up and maybe help someone figure out what's going on
+so a way is needed to count failed initializations across mcu resets
+now this is tricky because normal global and static variables are initialized after an mcu reset these are in the dot
+data and bss sections for those of you familiar with these concepts i cover that in my introductory course on
+embedded and we see how these areas are initialized in the startup code so a no init var memory block in ram was
+added to the linker script and we'll look at that in just a moment this block does not get initialized after the mcu
+resets like normal global variables would so this memory block contains a
+consecutive failed initializations counter used to decide whether to start the hardware watchdog at the start of
+initialization so this counter counts counts as initializations fail consecutively but
+it is set to zero and one of these events occur one is a successful initialization occurs obviously
+and another is if the memory block contains invalid information that would happen for example after a power cycle
+when all ram is lost so we start if we go through a power cycle something happened then we'll start from zero and
+then the last thing is if the previous mcu reset was not due to a hardware based watchdog we're trying to limit
+consecutive failures when the system is resetting itself if someone pushes a
+reset button for example we start over so by the way another choice would have
+been to store this counter in flash then i it would in some ways make things
+easier but you know writing to flash has its own issues and so i chose
+this method as being a little bit simpler so here we are in the linker script file
+which is in the project workspace and in my case the file name is
+stm32f401 retx underscore flash dot ld
+so this file is used as part of the build process and it basically tells the linker how to assign code and data to
+flash and ram and ultimately assign addresses i described this file and how it's used
+in my introductory course on embedded so i'm using a ide
+the stm32 cube ide and it actually generates this file so for simple
+projects you never really need to worry about it but here we're doing something out of the ordinary
+so let me go to the changes i made here
+which are on line 163 so i added
+these lines so the first line is just a comment uh saying what this uh what this purpose is
+and then i'm not going to get into the syntax here uh it's not critical the point to
+remember is we're defining a new uh section of memory
+and this line here in particular is telling it to put variables that
+belong to the dot no dot init.vars section into this area of memory and this is
+saying that this area of memory is in ram the other thing we can tell by looking
+at the position of this these lines relative to other definitions we can see
+where it's going to go and right up before it is the dot bss
+section so so it goes right after dot bss and right before the user heap
+so we'll see shortly how you tell the compiler that you want a variable to go
+into this section and again the whole purpose of this is these variables that are in here
+will not be touched by the startup code after reset so now let's look at the api of the
+watchdog module keep in mind this module can be thought of as providing a watchdog service to other software and
+that other software is normally inside other modules so we're in the header file
+first thing here is a typedef for a
+function pointer which is the callback function that the watchdog module calls when a
+watchdog has triggered and i like to use typedefs when using function pointers
+just because the syntax is always a little confused confusing these next these first two apis are just
+part of the standard apis for a module so i won't talk about those then these are the watchdog specific
+apis this first one is used to register a watchdog
+where the client software passes in the watchdog id these are
+defined uh statically and they're in config.h and then here's the the period
+for the watchdog in milliseconds this is the way to feed a watchdog to
+keep it from triggering it's pretty straightforward this is a
+method or a function to allow in our case the fault module to
+register a callback to say call this function whenever a watchdog triggers
+these next three apis regard the hardware watchdog and this first one is to
+start the hard hardware watchdog for initialization now based on that logic of preventing
+endless initializations this function may or may not actually start the what the hardware watchdog
+this api is telling the module that initialization succeeded the module
+needs to know that based on that a lot that logic to uh prevent uh infinite looping of hardware
+initializations and then finally this function here does the actual work of of
+initializing the hardware watchdog and it's it's the one that's also used when
+we enter steady state so now let's look at some selected
+coding in the implementation file first would like to look at some data structures
+here is the structure for a soft watchdog which just contains the watchdog period and then
+the last time it was fed which is a timestamp in milliseconds this is the
+state data for the module which is just an array of software watchdogs and then
+the uh callback pointer the function callback pointer used if a watchdog
+triggers and then finally here is the no initialization variables
+structure we talked about this before and the main thing in here is this consecutive failed
+initialization counter now there's two other variables in here magic and check and these are used to
+basically verify whether the data block is valid or not for example after a power cycle it wouldn't be valid
+so the next thing i would like to look at uh 121 is
+uh the watchdog the new init bearers here's where here's where we actually declare a variable and we'll call no
+init bars it's of that structure and then here is the key information
+this underscore attribute keyword is not standard c but it's
+supported by the gcc compiler and allows it allows you to tell the compiler what
+section this variable should be in and here we tell it this information then gets passed to the
+linker and then the linker uses this when assigning variables to memory and
+if you remember in the linker script we told it where it should put variables from this section
+so that's that's takes care of the no init variables so let's go
+start looking at some code this is the standard start
+function for this module and the key thing in here is we are starting a timer
+and this timer is the one that will actually be checking the software um watchdog timers
+and this this tells how often the timer is going to run and that's uh 10 milliseconds of course it's it's tunable
+so here is the client registration when a client wants a watchdog and it passes in the watchdog
+id these are static values which are assigned at compile time they're in config.h and here's how long the
+watchdog should be and this is pretty straightforward it's just filling out a data structure
+so let's look at the feed api that's really simple all it does is that
+last feed time in milliseconds it updates that to the the current timestamp
+so [Music] next this is the function that
+starts the hardware watchdog timer at the beginning of initialization it either starts it or it doesn't start it
+it might not and the first thing it does uh first of all it validates the no
+indent vars and this what this function does is looks at that data structure and
+validates whether it's correct or not if it's not correct it reinitializes it
+so the first thing we do is look to see whether the reset that has just occurred
+was due to the watchdog timer if it wasn't due to the watchdog timer
+something else happened power cycle button was pushed or whatever and we set the
+consecutive failed initializations to zero and then this is the logic that actually decides whether to start the
+watchdog and if and based on that it will either call this function which
+actually starts the watchdog or or it won't notice we we update the failed
+initialization counter we assume it's going to fail and if it does fail we won't have a chance to increment that
+counter so we do it here but of course if the initialization succeeds we we set
+that counter to zero so uh
+here is the code that actually does the low level details of starting that
+hardware watchdog timer i won't go in in this uh it looks sort of complicated i
+tried to make the calculations very clear but what it's doing it here is computing a count value based on the
+clock rate and and other factors and then right here
+is it's actually loading the registers of the watchdog timer and you notice it uses the ll or low level uh library to
+set those registers i wanted to point these out this is interesting i found this out the hard
+way by default when you use a hardware watchdog timer
+and you're running in the debugger and you hit a break point and the debugger stops running or the code stops running
+the hardware watchdog timer does not stop running and what happens is you get
+a break point and then shortly thereafter the the mcu resets and and that makes it hard to debug code these
+these these lines tell the mcu we're setting some register uh values here and it's
+telling it when the cpu stops stopped the watchdog as well
+so the final thing i'd like to look at is that timer callback and
+that is going to check the software watchdog timers and that's exactly what it's doing
+in this loop and right here and here it's checking the time stamps and so forth and here is
+the case where a watchdog has triggered and it's calling the callback function which in
+our system is going to go to the fault module and then here is the very special code
+if no watchdog triggered this line here actually is
+reloads the the hardware watchdog and that's what we would call feeding the hardware watchdog
+so there's more code here to look at but i'll just stop here
+so now i want to do a demo of the watchdog module now it's hard to do a demo of anything very interesting with
+this module on its own we really have to get other modules involved and so that's what i'll do
+so first i have a module called temp hum for temperature humidity i developed
+this module for my i squared c course and it communicates with a temperature humidity sensor for this course i added
+a watchdog timer to temp hom that will trigger if it has problems getting measurements so let's look at some key
+code
+here is some new code where it registers a watchdog and passes in the id and the
+time in the period which i think is five seconds there are some hash there's a hash if on this because this is sort of
+an optional uh an optional feature for this module so the other
+key line is 333 here's where we feed the uh watchdog and this code is in the middle
+of a big state machine it goes through the the module has to go through several steps to uh request and get a
+measurement and validate it and so forth and if everything is good then the the watchdog will be fed if it
+has any problem along the way it won't get fed and eventually the watchdog will trigger
+so the other important module is the fault module which is a new one
+for this course it is the module that will be notified if any watchdog triggers so in our demo
+of the watchdog module we will see actions being taken by the fault module and i'll explain this as we go so let's
+get started so here we are at the console what you see here is the temp hum module logging
+its samples out to the screen so i'm going to begin by resetting the board
+and then i'm going to enter control l which is used to toggle logging on and off so now it's off
+and i just want to point out that when you reset the board the first three lines that come out are these and we'll
+be seeing those later so i want to show the watchdog status command
+and there's some information here the key thing i want to point out is it has a a
+line for each soft software watchdog and there's only one
+for the temp hum module but if i enter this command over and over you can see this last well these
+last two numbers change and this is the last time that watchdog was fed and this is how long it's been in milliseconds
+since it was fed and you can see it those values changing as we go so
+now i want to cause this temp watchdog to trigger and i can do that with a
+i2c test command the the details of this really aren't important but what this is
+going to do is reserve the i2c bus that the temp hum module
+needs to operate and that will cause problems and it'll eventually cause its uh watchdog to trigger so
+let's turn the tracing on and now i'm going to enter that command
+and now it has stopped taking samples
+and let me stop this and we can look at what happened so
+it stopped taking samples and a few seconds later we get this output and this is coming
+from the fault uh module and it's saying i had a fault of type one that's a that's a watchdog and this is the
+watchdog id which is zero we'll talk about this information in a later lesson
+and then the next thing we see is those init lines so the fault module had
+had reset the mcu and because the mcu got reset that cleared out that reservation and now the uh temp home is
+is working again sort of recovered i guess you could say so there's one more thing i want to do
+and that is there are some watchdog test commands to do test
+various things and one of the things i can do is uh prevent the watchdog module from
+feeding the hardware watchdog and if you look at the code you'll see there's a flag in there that does this it's it's
+very simple so um this is the name of the command i'm just going to copy that into my
+into my paste buffer and then i'm going to turn logging back on so i'll enter
+the command now it continues taking measurements
+but there it goes the system just reset so what happened is
+we stopped feeding the hardware watchdog it then reset the system right here and
+then we start up again and you'll notice in this case the fault module didn't get involved and that's
+because it didn't have a chance the hardware uh watchdog um expired and it
+just directly reset the system so that's it for the demo
+i just want to add i used small values for the watchdog timeout periods like five seconds this was to keep the demo
+short in a real system you sometimes pick much larger values than you think you need just in case the idea is you
+don't want to have systems resetting and then later you look into it and you find out oh i set those watch dogs too low
+and those resets weren't needed so here are the problems for this lesson
+i'll just pause a second and then go through them
+how might the watchdog module be enhanced to support the case where a client is going to be busy for a little
+while and won't be able to feed the watchdog during that time i asked this because i think i had to do
+this on some project i can't remember what exactly the circumstances were
+so there are some options i thought of one is to have a way to simply increase the timeout period on the fly
+it would be up to the client to put the timeout period back to the original value when it's done i think the thing i
+didn't like about this is this forces you as the designer the software to be able to predict how much
+time you're going to need and that's a little that might be difficult
+another one is to have an api just to tell the watchdog module to stop checking this particular watchdog for a
+while and then another api to say okay you can go start checking it again i think that's what i did
+another option is to use this timeout handler feature which is actually part of the next prompt where a client can
+intercept a watchdog trigger how might the watchdog module be
+enhanced to support the case where a client might want to try to handle a trigger event itself before allowing the
+system to be reset
+so the way i thought of doing this is to add a parameter call it handler to the
+registration api where the client could specify a function to be called when the watchdog triggers
+so if the watchdog triggers then the watchdog module would um use this
+callback function first and then based on that function's uh
+callback function's return value the watchdog module could either just ignore that the trigger ever happened
+or it could pass it to the fault module as normal so in other words this would
+allow the client to say oh never mind ignore that that watchdog that just expired i i took care
+of it so here's a short summary of the lesson watchdogs are a common way to ensure the
+system is performing its function hardware-based watchdogs when supported typically directly reset the mcu
+but sometimes you want to take some actions before the system is reset for example saving state information that
+will help you figure out what happened this can be accomplished with software-based watchdogs that trigger
+before the hardware-based watchdog or at least under normal conditions and some hardware watchdogs do support an
+early warning interrupt that is another way of accomplishing that so i hope this lesson was useful and
+thanks for watching

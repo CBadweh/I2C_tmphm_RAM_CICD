@@ -1,0 +1,308 @@
+in this lesson i cover stack overflow it is a nasty problem when it occurs because the effects of it are so random
+the cis system often just starts acting uh strange so of course you don't want
+it to occur but if it does occur you want to take action so let me quickly go through an outline of this lesson i
+start with an introduction like what does stack overflow mean and then go through some techniques to address
+stack overflow and these are the techniques we'll explore in this lesson next i'll discuss the memory protection
+unit or mpu that is becoming more common in microcontrollers then i'll talk about
+adding a stat guard using a mpu following this i'll talk about a
+well-known technique to determine how much stack you're actually using
+then i'll look at the implementation the code that implements these features
+this is followed by a demo and then finally some prompts or questions for you to consider and i'll
+give you my take on them the stack is a region of ram used for
+functions and interrupt handlers for temporary storage for functions the stack is used for
+things like return addresses saving registers and particularly local variables in some cases the stack is
+also used to pass arguments to the function but cpu registers are used for
+argument passing when possible now interrupts use the stack in much the
+same way as functions although there are no arguments to pass in some systems
+there is a separate stack for interrupts but in this course we have a single stack
+so as function calls and interrupts nest the stack grows
+so here we have a scenario with a function call stack that starts with main and then main calls funct2
+or func one and func one calls funct2 and while funct2 was executing an
+interrupt occurred so we have this interrupt handler and it called funct10 so we want to see how this
+scenario is handled on the stack so over here we have a diagram of ram now this
+diagram is not to scale at all and in particular this bottom region here
+should be much much bigger but of course i have to fit it on the page so on the
+left is the starting address and the ending address of ram and this is for the mcu
+i'm using for this course and you can see that the stack pointer is initialized to the highest address in
+ram and this arrow here shows how the stack
+grows as it's used and the stack pointer moves to lower values as it's used and you can
+in fact see here is the current stack pointer so we can see how each function uses a
+bit of the stack and as functions call each other the stack grows and then when these
+functions return the stack shrinks now when an interrupt occurs
+the interrupt handler needs stack as well including the functions that the
+interrupt handler calls like func 10 in this case
+and here you see we have some unused stack space we need to have some spare
+and beyond this we have other users of ram like global variables are the heap
+so the problem becomes if the stack ever extends into this area and which is why
+i have this danger sign here this is called stack overflow
+now the cpu doesn't know it's exceeding the stack area in general and you as a developer will
+probably not be aware of it at first but what happens is this memory
+will start to get modified at random and usually weird things will start to happen with your system it
+can be very confusing i and many developers have spent quite a bit of time debugging a system that is
+doing weird things before realizing oh the stack has overflowed
+so of course you need to make sure your stack is big enough so this doesn't happen but as i state here
+it's hard to estimate the maximum stack size because you would really have to
+understand the code very well and how much memory or stack each function is
+using it's would be extremely difficult now there are some tools that help you
+the compiler knows how much stack each function uses and the compiler knows which functions call each other so it
+can try to figure out a worst case stack usage but there are limitations to this
+these kind of tools and i really haven't used them so here are some techniques for
+addressing stack overflow and this is what we'll be exploring in this lesson first for mcus that contain a memory
+protection unit or mpu it is possible to put a stack guard region that limits
+stat growth to its allocated area we'll talk about mcu shortly
+as i had mentioned it's hard to estimate maximum stack usage but if we can find out the maximum amount of stack we have
+used on a running system it will give us some idea so we can use this technique
+listed here we fill the stack memory with a special pattern
+during initialization and then as the stack is used it will overwrite that special pattern with real
+data so at any time the high water mark of the stack meaning the most stack we have
+ever used can be determined by finding the first location not containing the special pattern
+now this method has limitations because you often can't be sure that the maximum
+stack usage scenario has occurred but it still provides a useful data point
+so now let's talk about memory protection units or mpus first let me say don't get an mpu confused with a
+memory management unit or mmu an mmu is used to support
+virtual memory for operating systems like linux most mcus don't support virtual memory
+so an mpu is a hardware device within the mcu that can place restrictions on
+specific regions or blocks of memory like whether the memory in that region can be read or written
+there are a limited number of memory regions supported by an mpu and
+there are eight for the case of this mcu which is the one we're using
+to set up an mpu region you specify a starting address a size or ending address and then the
+access restrictions for example whether the memory is read only so to create a stack guard with an mpu
+you use the mpu to create a small memory region just beyond the stack area that is read-only
+for the mcu we're using the minimum mpu region size is 32 bytes
+i mentioned this size because this is usually wasted memory in this case 32 bytes is not too bad
+so what happens if the stack overflows and the stack guard region is hit
+well when the processor tries to write to a location in the stack guard region
+a fault occurs and for our mcu the fault is called memanage
+and when this happens a the corresponding exception handler or interrupt will be invoked
+typically it depends on the software the mcu software will do a reset and
+that's not great but it provides some things one is safety the reset prevents dangerous behavior
+due to the memory corruption and two availability we want to maximize the
+time the system is running properly the idea is usually that if the system is corrupted you just want to do a reset
+and get it over with obviously you want to catch these problems during testing before the system goes to the field
+and you want to size the stack area bigger than you think you will need as a safety margin just in case
+usually if they're a spare ram you give all of the spare ram to the stack
+so here are some diagrams showing how the stack guard region fits into the ram memory map
+on the left is the initial ram map for the course project this is based on the linker script that the ide generated and
+we'll be looking at that linker script shortly so the linker knows how much memory is needed for the dot data in the bss
+sections because that's just based on the number of global and static variables as variables and their size
+then there are project settings for the heap and a minimum stack size
+so that brings us up to this point in terms of the amount of ram we need and
+if there is not enough ram to get to this point that's a linker error and the build fails and things stop right there
+but in our case we have some extra unused ram and the linker script and the startup code is set up to just give any
+unused ram to the stack in the case of our project there's a lot of unused ram so the stack is quite
+large now on the right is a modified ram memory map which i got after modifying
+the linker script so all i did is added this extra block here of memory for the
+stack guard and this happens to be 32 bytes long of course i'll need to
+write code to set up the mcu for this block and make it read only so if the stack is growing and heading
+this way and hits this stat guard region and tries to write to it we'll
+get an exception and that prevents this the stack from corrupting these other memory
+areas now let's look at the linker script this is a generated file in the project
+workspace and you can see the file name up here i just made a few changes to allocate
+memory for the stack guard region so the first thing i did is right here
+and this is just defining a constant this is the mpu minimum block size set
+equal to 32 as i mentioned for our mpu the minimum size is 32 bytes
+and then the next thing we want to look at is allocating
+ram and we're getting close here here it is so
+in this block uh it's allocating space for both the heap and the stack
+and the lines that i um modified or added are right here
+so if we look at this existing code this line allocates space for the heap
+and in this linker script the dot represents the current address so we are
+allocating things to ram so this would be the current address in ram as we allocate
+memory and by adding the min heap size we move the current address up by that much and
+we've essentially reserved that memory so the first thing i do after that and the new code is i use
+this align directive and what this does is it takes the current address this dot
+and ensures that it's on a 32 byte boundary it might have to add uh no bytes or it
+might have to add you know 24 or whatever and and that's the requirement of the mpu
+that this block be on a 32 byte boundary then the next line i want to mention is
+178 and this is where we add the mpu min block size to the current address so
+there we're allocating a reserving memory for the stack guard and then right before and after this
+you see where we declare two variables uh the start of the stack guard and the
+end of the stack guard and we assign these to dot which is assigning them to the current address being allocated
+these are like global variables in c and they they are available from c language
+files and we'll be using those so after uh we allocate that then the next thing
+that happens this is existing code that allocates ram for the minimum stack size
+and that's the end of nearly the end of this file and it's the last
+last part of it that allocates memory to ram now one thing you'll remember what i mentioned previously is that the startup
+code will actually use the highest ram address as the initial stack pointer and
+thus it gives any unused ram to the stack
+so here are some more diagrams showing how we determine the max stack usage on a running system it's pretty simple
+during initialization we fill in the stack with a fixed pattern and you'll
+see this when we look at the code and on this diagram i represent the fixed pattern by this yellow with this
+texture now as the stack is used which it starts up here
+it will overwrite that fixed pattern with real data which is almost certainly different from the fixed pattern and i
+show the part of the stack that was used here with a different color and a different texture
+now the stack grows and shrinks as the software runs but when the stack shrinks
+the fixed pattern is not restored it will remain whatever data was on that stack how it
+was being used and so this leaves what we call a high water mark in the memory so you can
+always tell what part of the stack has not been used so to determine the amount of unused
+stack we just start at this point down here and we just search upward until we
+find memory that does not contain the fixed pattern when we find that first
+memory we know we are at the high water mark and we can calculate the amount of stack that was used it's as simple as
+that so now let's look at some code i didn't think that these stack features were large enough for a module of their
+own so i put them into the fault module so we're going to be looking at selected pieces of fault module code and there's
+no api specific to these stack features so there's no need to look at a dot h file
+so we are in fault.c and i'll show a few highlights starting on line 64.
+here is the pattern that we write to the stack on initialization and
+it doesn't matter too much what this uh pattern value is uh you don't want it to
+be a common value like zero or probably any small integer people often like to use patterns so
+that if they see a hex dump of memory they they can recognize it and and that's what i did
+this pattern if you read it you can read it as cafe bad so it's sort
+of a memorable pattern probably isn't going to happen by chance
+so now we move down to oh let's see line 253
+and this is a fault start this is the standard api for how modules get started
+and the things that are interesting here are first where we here's where we fill in
+the stack so the stack is being used
+as this code runs and of course we can't fill in the part of the stack that's in use so we start with the current stack
+pointer and go from there now how do you get the current stack pointer there's different ways what i have chosen is to
+use a an extension to see that's in the gcc
+compiler that allows you to put assembly language instructions in your c code and
+this is a common thing if you want to get registers for example and the stack pointer is a register so what this uh
+what this line does is writes an assembler i think maybe two lines of assembly that take the stack pointer
+register and copy it into a a c variable in this function called sp
+now for this cpu you always decrement the stack pointer before writing a value so i decrement
+the stack pointer here um before i write the first v the first pattern and then
+this is the loop that writes the pattern and you can see it's it's comparing the
+stack uh pointer value um with this s start guard which if you'll remember uh
+comes out of the linker file and this is the start of the guard region and so
+we're not only filling in the stack we're actually filling in the guard um the stack guard as well and no
+particular reason i'm doing that i can and i can because we haven't yet set up the mpu
+so that's what we're going to do next and uh now this code supports a number
+of different mcus they're all stm32 mcus
+but not all stm32mcus have the same mpu hardware there's different types and so
+uh the mcu we're using has an mpu type one
+that type one is just my my uh designation and i'm going to just quick
+switch back to config.h config.h is a huge file full of tons and
+tons of of hash defines for different feature constants and so forth
+and there's one section of it which sets a lot of things based on the mcu so we
+are and this is our mcu type and here is where we set the um
+mpu type to one so whenever i want to support a
+different mcu i have to sort of discover is the mpu the same as one i previously support or
+is this a new a new yet a new style of mpu that i'm going to have to write more code for
+so going back here we have uh in this case npu type one and then in in this
+case because this is a little bit tricky i wrote uh notes about all of the things
+we said in the registers and what we and what i set them to and why
+and the key things are the region this is the mpu region it supports eight
+numbered from zero to seven uh this is the starting address of the region which again is that that variable
+that comes out of the linker script this is the size of the region 32 bytes
+and then this is the permissions of how you can access this
+memory and this is saying it's read-only so you can't write to it and then i won't go through the rest of these
+it's more details that are less interesting i would suggest if you're interested in these
+mpus you look at the reference manual for the mcu and and of course i spent a
+lot of time looking at that reference manual reading the details of these registers because these ll
+function calls all they're really doing is taking this data and and writing it into a register or maybe two registers
+so here we set up the region and then the last step is we enable the mpu and
+uh the stat guard is now in place so there's one more piece of this code i
+want to look at and that is
+this handler function for the console command fault status
+and so so this is function gets called if you type in fault status at the console
+and the part i want to look at relates to the stack there's first there's a print here that's just
+writing the um the the limits of the stack so the beginning address and the ending address
+and that's really information that's determined at build time you could look in the dot map file and find that same
+information but the more interesting thing is to find out how much stack you've used and this involves finding
+the high water mark as we call it and so that's what these three lines of code are doing
+they are starting with at the lowest address of the stack and moving up and looking for the first place where
+the stack does not contain that init pattern if it doesn't contain the init pattern
+we fall out of this loop and now we can print how much stack is being used
+and so that's the whole the whole point of of using that pattern is we can now run
+the system for a while and print this this information and we'll be doing that in the demo
+there actually is one more thing i want to show you i forgot um and that is another console command called fault
+test and in fault test you give it a some kind of operation you want to do
+and there's different to test different things and one of the operations is to
+cause stack overflow and here is the code
+that detects that it just calls a function called test overflow stack
+and this is a simple function it just calls itself so this is going to be infinite
+recursion so every time it calls this off it's going to use us a little bit more info or a little bit more space on the stack so from a human
+perspective it will almost instantly cause uh stack overflow and we will do this during the demo and
+you can see the effects of that so now for the demo what you see here is the
+temp hum module printing out samples on the console so first i'm going to reset the board pushing the reset button
+and then i'm going to do a control l to stop the logging so the first thing i want to do is look at stack usage and
+that is shown on the fault status command and you can see right here
+the high usage mark the high water mark is 864 bytes now i'm going to enter some
+console commands that i know use a little bit of stack one is tty status
+well let's look at the let's look at the fault status again okay so it's the high water mark has
+went up to 940 and now i'm going to do a dio
+status port a i think that he uses even more stack so we were at uh 940
+so now we're up to 1012. of course if we do a ttys status which
+uses i think less that shouldn't affect the high water mark and it doesn't so that's the um the
+usage of the of the uh stack usage and uh i think you could see that if you're
+developing a system you would let it run for long periods of time and and enter that command and see how much stack
+you've used and that gives you a sense of add some safety margin to that maybe and
+that gives you some idea of how much stack you should reserve so now we're going to do a stack overflow
+and that uses the fault test command and in particular it uses this one if you
+remember we just looked at the code when i execute this command it's going to go into an infinite recursive
+function call that will quickly run out of the uh quickly exceed the stack
+so here we go and that didn't take long the system
+reset so uh right here you can see that it uh it reset and before that
+uh the fault module caught a a fault uh an interrupt
+and that's what this fault type 2 is telling us and then 4 is the the type of
+interrupt which i believe is a managed one so what i'm going to do is take this data that the
+fault module produced and we're sort of jumping ahead a little bit here and i'll run that through the decoding tool and
+we'll take a look at it so here i am in the
+command shell and i'm in the fault directory which contains the decoder tool for the fault uh
+output and i put that text into a file called demo.txt
+and there it is so now i want to run the decoder which
+there it is log format so i give the directory where it finds the
+source code and then the file containing the uh
+text the raw text and then i'm just going to put that in a file called
+decoded.txt so here we are in an editor looking at
+that decoded file and before i look at this i want to go to the map
+file for the build and find the stat guard
+and here it is and the beginning address is in ram is 2018-20
+and the end address is 2000 1840 so remember those values
+uh now we look at the fault data and the first thing is the fault type which
+is defined in the fault header file and this would say an exception occurred the parameter for that type is the fault
+number this is defined by arm cortex m and four means mem manage
+now mem manage can mean a lot of things and that information by itself
+is not that useful i mean it's good to know but you really want more information well
+the designers of the cortex-m have provided provides other information in
+the form of registers and there is a register mm-far i think that stands for
+memory manage fault address maybe and it tells us that the address that
+calls default was 2018-38 that is in that uh stack guard area so
+this makes sense uh the other thing is the stack pointer at the type time of the vault was 18
+2018 20 right on the edge of that uh stack guard so that's useful information
+sort of confirms what happened if we didn't know now there's some information that unfortunately we don't have one of the
+things that would have been nice is to know what the execution address was when this
+occurred and normally we get that off the stack when an exception happens
+information gets written to the stack but of course in this case the stack wasn't working because we had hit that
+guard area so what we see in the in that what we all the stack information actually
+contains that uh phil um pattern that was uh written
+actually into this the stat guard area during initialization
+so here are the prompts or questions for this lesson i'll pause here just for a second and then go through them one by
+one with my take is it possible for the stack guard to
+find in this lesson to miss stack overflow in other words not work
+well yes i think it is possible under the following scenario you have a function that has a block of local
+variables of at least 32 bytes in length and these variables are never written and the 32
+bytes is because our stack guard block is 32 bytes when the function is called that block
+of local variables is a is aligned or sort of overlaps with the stack guard
+region since no writes are attempted to the stackguard region because it's being
+used to hold those unused local variables no fault will occur
+so in effect the program has jumped over the stackguard region now this is probably unlikely
+although i have to say this is used as a way to attack programs
+in which case it's an intentional they actually do this i'm thinking of the in the linux world
+and a larger guard region will make it less likely but it you know it could
+still occur now i had this note down here to check
+out the gcc f stack check option this is a option
+for intentional attacks and what it does is it probes the stack to make sure that
+the stack is really writable in to ensure there's not a guard region that is being
+jumped over i'm not sure if it would work for this small stack guard region but it could be some
+it might work something to look at if you're really concerned about this
+could you somehow keep running after a stack overflow fault rather than just reset which is what the fault module
+does well i think the answer is yes
+it's possible but it seems like it would be very difficult you know the thing is is that
+the system who knows what it was doing when it hit that stat guard how do you recover from that
+but i thought of a couple things one is you
+just reset the stack pointer to its initial value and you just jump back to
+main and start over now what's interesting is that global and static variables would not be reset
+to their initialization values and maybe this is what you would want maybe your code would be smart enough to realize
+what happened and it would try to pick up running again sort of where it
+left off there's actually an interesting story about the apollo
+lunar lander which did go through resets like this it had a system exactly
+as i described it went through some resets due to some issues while they were landing and it would just pick up and keep keep
+going so it's a really interesting story the other thing is that came to my mind
+and see there are these functions called set jump and long jump and what you can do is someplace in your code you can set
+call set jump and it fills out a data structure and then later you can call long jump and you pass that data
+structure and it sort of magically puts you back to where you were when the set jump was executed so you can sort of go
+back in time these functions have always been a little bit dodgy uh
+people don't really think uh they're they're safe or they should be used but
+it's something you could look into i don't know really how practical it would be
+so this is the end of the stack overflow lesson i hope it was useful for you and thanks for watching

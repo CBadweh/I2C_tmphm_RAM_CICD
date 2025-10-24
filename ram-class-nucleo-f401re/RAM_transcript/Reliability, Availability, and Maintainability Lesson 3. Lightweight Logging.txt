@@ -1,0 +1,289 @@
+in this lesson i cover lightweight logging in general logging is an important tool for maintainability
+because it lets you knows know what's going on inside your system and as we shall see lightweight logging can be
+especially important for software maintainability for problems in the field or problems in general that are
+difficult to reproduce to be clear i already have a traditional logging system that works fine but it really
+isn't designed for this purpose it has a lot of runtime overhead and that makes it unsuitable for what we want so a
+lightweight logging is a parallel logging system that is for a different purpose
+so let me quickly go through the outline i start with an introduction then there's a small set of requirements
+for lightweight logging then i described the usage from the developer's viewpoint
+then a high-level design the c-level api
+the implementation then i do a demo of lightweight logging and finally i give some prompts or
+questions for you to consider and then i give you my take on them lightweight logging is a mechanism to
+record software activity in a way that uses low amounts of cpu real time and
+memory compared to traditional login utilities now this is just my name for it and there are probably lots of other
+names that people use and there are also lots of implementations of this around but i'm not aware of a de
+facto standard implementation people tend to do their own thing like i have done a number of times in my career
+because it's not super difficult to implement and then and in embedded you're just sort of used to doing your
+own thing in many cases so the objective of uh lwl is that it
+can be enabled on a product running in the field without affecting its operation now this is not the case with
+traditional logging where you often have to be extremely careful with using it on a live system
+so taking this objective a step further we would like to have it enabled always so it is simply part of product
+operation and this is the key you never know when you want logs so the ideal case is you always have them enabled
+now lw typically writes to a circular buffer and ram this is a big part of how we
+achieve low low overhead and we'll be talking about this later a major use case of lwl is to see what
+the system was doing immediately preceding some fault for example a watchdog triggered
+and for this use case you can compare lightweight logging to the flight
+recorder used on aircraft and this is the use case we'll be focusing on in
+this course with lwl offline formatting tools are typically used to make the log data easy
+to read and the formatting tool typically needs access to the source
+code to get information about the log statements for example the format string
+we'll see how this works later in this lesson here is a list of requirements for
+lightweight logging and i want to say first of all i'll admit these are based on my personal preferences and you or
+your team might have different requirements based on the product and your preferences so let's first take a look at usage from
+a developer viewpoint first we want a printf like api as that's what all c
+programmers are familiar with and we want to make it reasonably simple to add log statements to a file
+again the goal is to make it as easy as adding a printf we don't quite achieve that but we're fairly close
+we also want to make this usable at both base level processing as well as in
+interrupts because in bare metal we tend to deal a lot with interrupt functions so that's important
+so now let's look at some of the requirements for achieving low overhead
+first there can be no runtime formatting of log messages this is things like converting integers to text and so forth
+that are part of an actual printf and this is a big part of the overhead of logging
+so if we don't do run time formatting where do we do it well we have an offline formatting tool that will do
+that as you'll see later so you transfer transfer the raw data off of your system
+and then you display it for example on your laptop now along with the last two requirements
+format strings are not to be stored on the system they shouldn't be in the flash image for example that would just
+be wasted space we don't need them we need to support
+integer like statements in lw statements and and uh integer like means also in
+numes and booleans and so forth pointers um the main point is strings and floats are
+not required then finally the user can specify how
+many bytes are needed of each parameter and so for example if if you're logging an
+integer which is 4 bytes but you know you never have big values in it maybe bigger than a
+hundred um there's no need to store anything other than the lower um the least significant byte
+and of course the motivation for this is you're saving space in that circular
+buffer so now for some general requirements the first one is no source file editing
+during building and this is a big design choice the idea is
+you could have a tool that creates a temporary modified versions of the source files where the login statements
+have been converted into code and then these modified files are the ones that are actually compiled now this technique
+gives a lot of flexibility and can make the api easier to use and i've worked on a large
+system that used this technique and it worked well but i don't really like it because it complicates
+the build and complicates things overall uh in one of the prompts we will go through some of the advantages that such
+a system um would have so in the k in this course um we use macros
+uh to to do these uh log statements and you can do things with macros but it's not it's nothing
+like what you could do if you edit the source uh then there's a super loop requirement which basically
+means it has to be non-blocking because that's the environment we're running in and then all the modules i
+develop i always want to have support for test and debug so for instance console commands to dump
+the state information and to test the operation
+and this node at the bottom just says that storage of the lw buffer to flash is outside of the lwl
+module and we'll see actually in this course we had something called a fault
+module and it's the thing that actually um stores the the buffer into flash and of course the
+lwl module has to support that by providing a api to get the
+address of the buffer i'm going to start with the usage and work down from there first it's
+important to understand that lwl records are identified in the circular buffer using a unique id the question
+from a design point is how you manage those ids so here is how i did it each file that
+contains lwl statements must include lines like the two shown below that
+define the l the ids that can be used by this file if you use more
+statements than than indicated by these two lines you'll get a compile
+time error so in this case the file has the ids 20 through 29.
+so these lines these two lines are needed by the lwl statements below
+but the formatting tool also uses them currently the formatting tool requires that literal numbers be used like this
+the 20 and the 10. so here is an example of an lwl statement of course this is a sort of a
+phony example and we are logging an enumeration in a 16-bit
+unsigned int so looking at this lw statement it
+starts with a format string just like for a printf although the formatting is actually done
+in the formatting tool which is python but python formatting strings are pretty much the same as for c
+i'm going to skip this argument for a moment now you specify your arguments
+like you do in printf this is a variable length list that must agree with the format string
+but in this case for each argument you must specify the number of bytes to be recorded by using one of these macros
+lwl1 lwl2 lw3lwl4
+so it isn't quite as simple as a printf but it's not too bad and having to specify the number
+of bytes to use for each argument makes for a compact encoding you want to get as many
+statements as you can into that circular buffer so now back to this argument uh
+this is the total number of argument bytes it is just the sum of these in this case one plus two
+i don't like this because it's redundant information but i couldn't figure out a way
+to avoid it given our requirements now the formatting tool will ensure that this
+value is consistent with uh you know with these arguments
+and in general the formatting tool does check for correctness and it could be run before the build
+just to verify there aren't any problems but it's not required
+here are a few notes about the design i have a diagram on the next slide to help illustrate this so lwl information is
+stored compactly in a circular ram buffer as i had mentioned we want to be able to store as many messages as
+possible in that buffer now there is a header area with that buffer that indicates the
+circular buffer size and the current put index into the circular uh buffer the
+put index tells us where to start decoding as we want to start with the oldest logs
+so to view the logs we dump the lwl data in a
+raw hexadecimal text format and this includes the header area that has the
+put index then we take that raw data and we decode
+it offline using a formatting tool that happens to be written in python
+this formatting tool searches the source code for lwl statements to include the
+lw format strings and argument information required to decode the
+lw data dump the formatting tool uses the current put
+index to find approximately the oldest lwl data and thus the oldest lwl record
+here we see a diagram of the lwl data and a single record
+so this first diagram shows the header and the circular buffer
+and in the header we see the put index which points
+to the next byte to be written and this will be just after the last lwl record
+written now these lwl records are variable length and so this put index
+might point into the middle of a an older record that was partially
+overwritten by this last record written so when the
+formatting tool wants to decode this data and it has this put index
+it has to be aware that it might not be pointing to the start of a record and so
+there's a little bit of a heuristic where it has to find the beginning of a
+lwl record and sort of get in sync with the the lwl records
+the other thing to keep in mind when looking at this is that if you have a record an lwl record that starts here it may
+very well be that the record starts here but then the end of the record is at the
+top in other words it's split across that boundary because of the circular
+buffer now over here is an example of a single record
+and what i did here is just use the same example as in the usage um slide a few
+slides ago and so we're printing uh or we're invoking the log
+with a new and we want to just record one byte and then
+this un-16 and we want to record two bytes and so here's what it would look like in
+memory uh the lwlid would be 20. i'm assuming here this is the first
+lwl statement in the file it could be up to 29 in this file
+and then the first parameter here i'm assuming in this case that state
+underscore init has a value of one and so that takes one byte and then this next uh parameter is two bytes and we
+know it's this mask value and these um parameter values happen to be stored in
+uh big endian format so this statement here
+took a total of four bytes of the circular buffer so here we are in the header file to
+look at the c api and i'll just point out a few things
+here is a standard module api used during module startup
+and this api here is the function that actually records
+a log copies it into the circular buffer now the user doesn't normally
+invoke this directly they use the a macro instead that we'll look at in just a second
+this api is called by the fault module it returns the length and the address of
+the lwl buffer and the default module uses this when it wants to copy that buffer into
+flash so here is the actual macro that the user normally invokes
+you can see it then just calls this other macro instead of lwl to lwl count
+and these macros use a very special feature
+underscore underscore counter and that's not of an official c language
+feature but the popular c compilers support it and
+what it does is every time you access this this macro its value increments by one
+it starts at zero and as you access it it increments
+automatically so it's a little bit magic and and we use that to generate the lwl ids
+so these two lines here are the key ones for that macro if logging is active then
+it calls lwl rec which we looked at up here
+and then finally down here are the macros for
+arguments and you choose one based on how many bytes you want stored for that argument
+and these macros just break the original argument values into separate byte arguments which are going to be copied
+into the circular buffer here we are in the implementation file
+and again i just want to show you a few things first let's look at this data structure
+and this is all of the lwl data there's some length fields in here and
+the size of the buffer and then here is a critical field which is the put index into the buffer and then this is right
+here buff is the circular buffer itself so the next thing
+i want to show you is the um the function that actually records a log
+and here it is uh there's a critical section here uh here's where the critical section
+starts and this is necessary so that while we're recording a log uh another
+function or interrupt or whatever can't come in here and try to log do one as well
+and there's some words here about how big the critical section has to be
+and generally you want critical sections to be as small as possible uh in this case
+there's sort of a trade-off uh i won't go into it but we make the critical section at least currently a little bit
+bigger than we would absolutely have to for reasons described here
+so here's where it's actually writing data into the circular buffer so it's writing the lwl id here and then this
+loop is writing the argument bytes into the circular buffer
+and you'll notice every time we increment the put index we do a modulo based on the
+buffer size and this does the wrap around of the index and so you can see this is the end of
+the critical section and that's it there's other code in here you can look at if you're interested
+including the the console commands so now i want to do a demo but first i
+want to show you some of the lwl statements in the code because we'll be seeing this output when we do the demo
+so first let's look at the timer module
+and here we are in the cystic handler this is actually an interrupt handler it
+gets called every one millisecond and one of the things we do in this
+handler is there is an uptime counter and
+in milliseconds 10 seconds every time the uptime counter in milliseconds equals 1000 of course we increment the
+seconds counter and we put out a log message of that the uptime seconds has changed
+and we include the um the new value of the uptime counter and then there's one
+more thing we do is if the millisecond counter modulo if it's a a multiple of 100 then
+we just do a log saying tick 100 milliseconds the purpose of these two logs is just to give you a sense of time
+when you're looking at the log output so next i want to look at the lwl module
+and here we're looking actually at a console command this is the lwl test command this is
+what happens when you execute that command it just prints four uh logs or in or it does four logs with
+different values for the parameters and different lengths of parameters it uses even values in here so it's obvious when
+you look at the output that that the arguments are being printed correctly and after it does those four logs it it
+freezes logging turns it off and then finally let's look at the temp hum module for
+the temperature humidity sensor and the first log i want to show is here
+this log will be made when we get a good temperature humidity measurement
+and then the other one is when we kick it off
+here we're in a timer call callback this timer gets occurs every one second and that's how
+often we take the temperature humidity measurements and under normal cases we'll see this
+log that says we're starting one there happens to be an error log right next to it this is where we can't start
+a new measurement because the module is not in the right state something has went wrong we shouldn't be
+seeing that in the demo so here we are at the console i'm first
+going to reset the board by pressing the black button and there it goes and now you see that temperature
+sampling information coming out and i'll just do a control l to stop that
+so first thing i want to show you is the lwl status command
+um there's not much there just the status the fact that lwl is turned on
+and then the put index if we execute this a few times
+we'll see the the put index changing as the as logging is occurring
+now i'm going to do lwl test and if you remember what it does is it issues four lwl log commands and then it
+disables logging so if we look at now look at the put index now we notice it is no longer
+changing and also on has went from one to zero so now i'm going to do a
+lwl dump so there's a lot of hexadecimal
+information this is the circular buffer and some header information and we'll talk more about this output format in
+the lesson on the fault module but for now i am just going to cut this
+[Music] data and put it into a file
+so here we are in a windows command shell in the source tree in the fault directory i went here
+because this is where the formatting tool is so i've put that lwl dump output in this
+file raw1.tx let's just cap that there it is
+and the formatting tool is called log format dot py here
+we'll be talking more about this tool in the lesson on the fault module but very briefly to run this tool you have to
+tell it a directory where it can find the source files the dot c source files because it needs to find all of the lw
+statements and get formatting information i also need to tell it the directory containing the lw dump output obviously
+this tool does have help [Music] but i'll just walk you through it
+so the directory where the source code is if i point to the parent directory and this where i am it will be able to
+find all of the source uh from that point on down and then the file where the
+raw dump is is raw1.txt so we execute that and we get a lot of trace out
+if you look at this it's not too interesting it's very um very predictable or it's a it's a
+pattern a one second sort of pattern we see the uptime in seconds going here
+it's 31 32 33. we see these 100 millisecond ticks
+coming out we see a start temperature humidity measurement and an end
+those measurements are being made on one second at a one second rate so they sort of line up with the up time and then if
+we go to the end we see these four test logs and that is the result of the lwl test
+command and if you'll remember after it issued these four logs it disabled
+lwl and so that's why these are the last log statements printed
+here are the prompts or questions for this lesson i'll just pause here for a moment and then go through them one by
+one giving my take how could this lightweight logging
+implementation be improved if you allowed the build system to create modified versions of the source code so
+this is the idea where there'd be some script or something that ran before the build that would take the dot c files
+that contained lwl statements and it would replace those lwl statements with some
+kind of generated code and then that's the code that would be compiled
+well there's a couple usability things i don't think the user would have to understand
+these logging ids at all for instance those hash to finds at the top of the file i
+think the the system that generated the code would handle that
+the user wouldn't have to supply that number of argument bytes parameter
+which i dislike again the the the um when the scripts generated the code it would it would
+know that and then finally this is sort of an efficiency thing the creation of the lightweight logging record in the
+circular buffer could probably be optimized quite a bit to be faster and
+i'm not exactly sure how that would would work it might be that you load the argument
+data in a local buffer or maybe you could somehow load it directly into the circular buffer inline in the generated
+code um and sort of related to that you could optimize special cases for example if
+there's an lwl statement with no arguments that could maybe be handled very efficiently
+how might you implement a real time lwl viewer in other words to see the logging
+in real time as it's generated
+well i actually did something like this once and it wasn't too difficult so
+what i did is rather than write the data to a circular buffer
+or in addition to writing data to a circular buffer the raw lwl data gets written to a tty
+or uart driver and so the ur serial interface would be
+connected to a laptop and i would have a program on the laptop that connects to the serial port
+receives the lwl data and decodes it and prints it to the screen
+so i mean this is not trivial but it's not too hard to do and of course the nice thing about this because the trace
+is very compact there's not a lot of data going across that uart
+serial link what is a possible solution to avoid filling up the circular buffer with the
+same trace message and the scenario here is one where you have put a
+log an lwl command in let's say the super loop that's
+probably not a good idea but let's say you did that and you find that when you look at the log buffer it's just full of
+those super loop logs and it's not very useful now
+so what might you do to deal with that
+well i've seen this in other systems i think linux some of the linux logging systems do this
+you would keep the lwl id of the last log record
+somewhere in the log buffer header so then whenever an lwl record is made
+if the lwl id matches you know the last record recorded you
+would just discard it and so now if you have um a hundred
+messages in a row with the same lwl id you only record one of them
+now as an option it sort of would be useful to know that the a bunch of those have been discarded i so i call it an
+option but i think you would almost have to do this the discarded log
+records would be counted and then when the next log record is made for some
+other lwl id you would first insert a special record that says uh that a
+certain number of records have been discarded with you know that match the previous record and again i i've seen
+this in in log files where it said the previous log message occurred you know 1
+000 times so this might be something to consider
+what are advantages and disadvantages of including a time stamp with every log record
+some logging systems have this where every record has the timestamp
+well the advantages are you have the time for every log record which might
+help understand what is going on the disadvantage is there might be a log
+records where a time stamp isn't that useful so it would be wasted space so i
+left it out in this system my personal preference but you could certainly include a time stamp maybe you
+just include two bytes use two bytes of a millisecond time
+stamp and that might be sufficient to to like to give you the intervals
+between logs uh now the comp i sort of did a compromise and that is to occasionally
+have a time stamp log record so if you remember i have a uh every time there's
+a new second of up time i print a record for that and then every 100 milliseconds
+i print a record and that gives you some sense of time so this is the end of this lesson i hope
+it was useful for you and thanks for watching

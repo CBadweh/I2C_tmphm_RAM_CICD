@@ -1,0 +1,644 @@
+in this video lesson we're going to look
+at two topics in preparation for setting
+up the cicd pipeline these are static
+code analysis and hardware in the loop
+testing so here's an outline
+i'll start with discussing static code
+analysis which is a great tool to use in
+a ci cd pipeline then i'll talk about
+hardware in the loop testing which is
+the majority of this lesson so the
+topics include
+first some background
+then the hardware and software setup
+used in this course and the connections
+the mcu
+application and what it does and how to
+test it
+then a demo
+then some prompts and followed by a
+short summary
+so static code analysis means examining
+code without running it just to
+understand it and the fact that you
+don't run the code is why it's called
+static
+now static code analysis
+usually implies it's a tool doing it if
+it were being done by a person we'd
+probably call it a code review
+normally static code analysis is done to
+find potential bugs so it's a good thing
+to run in a ci cd pipeline so that it
+always runs when code changes no one has
+to remember to do it and you get quick
+feedback with ci cd
+so that hopefully the developer who put
+in the new code will see
+any issues and and it's fresh in their
+mind to fix them
+so there are a lot of static code
+analysis tools some are free and some
+are licensed
+i chose to use cpp check because it has
+a free version although it also has a
+licensed version which is presumably
+better and it's easy to run from a
+script in my work i've also used a tool
+called coverity which is licensed
+it did an incredible job at analyzing
+code and finding issues
+so if you have good code that cpp check
+doesn't like you can put the special
+comments in the code just before the
+problem the problem in quotes to keep
+cpp check from complaining so as an
+example
+the last course i did i did had some
+fault handling code in it and that code
+was doing some address manipulations
+because it was looking into the stack
+trying to find some data
+and cppcheck didn't like what i was
+doing with those pointers and i sort of
+understand
+why it didn't like it but the code was
+actually fine and so in that case uh you
+can put this comment and here is the
+comment i used telling it that in the
+following code uh don't do these compare
+pointer uh checks because the code is
+fine now
+i don't do this unless i have to
+sometimes you can see that
+it's complaining it's being a little bit
+overly picky but i'll change the code to
+to make it happy
+now for this course
+i chose to only run cpp check on my code
+not ide provided code or any third-party
+code
+that's a decision that you have to make
+normally if you run it on third-party
+code you're really only looking for some
+serious problems hopefully you won't
+find them
+you probably aren't interested in fixing
+very minor trivial things in third-party
+code because
+in terms of software management having
+to modify third-party code is
+sort of a burden
+now in the pipeline as we'll see later i
+chose to continue going in the pipeline
+if cpp check detects a problem in other
+words i don't just stop right there
+but i do mark the build as unstable so
+that someone looking at that build can
+say
+even though it made it all the way
+through there's something not quite
+right about it
+so now hardware in the loop testing now
+hardware in the loop testing is just one
+of several types of possibly automated
+testing perhaps the more common type of
+testing is unit test and maybe higher
+level tests based on some level of
+simulation of the product's hardware now
+these kind of tests involve writing
+additional software known as
+or test harnesses and other names
+that is built with the product code to
+do the necessary simulation of hardware
+and usually but not always this kind of
+testing runs on the build host meaning
+that the product software being tested
+has to build and run on the build host
+and often you'll see some if depths to
+handle this special build
+so the emphasis
+of this course is hardware-in-the-loop
+testing but of course you should
+incorporate as many kinds of testing as
+you can as these types listed here the
+more the better the decision for you is
+where to spend the most time
+so one thing i want to make clear is
+that even a small amount of
+hardware-in-the-loop testing can be
+valuable for example just running the or
+running the software loading the
+software and running it and making sure
+it sort of comes up perhaps using the
+console
+is a
+great test
+and this is important for continuous
+delivery as it prevents what are
+sometimes called dead on arrival loads
+from being delivered it is sort of
+embarrassing when someone comes to you
+and says hey those last five loads you
+built
+won't even boot up
+now
+i want to make a special point of
+verifying the build id as part of your
+testing and there is a story i heard
+recently on a
+podcast that i could identify with about
+the ring doorbell if you aren't familiar
+the ring doorbell
+is an iot device it has a little camera
+and a smartphone app and there's various
+use cases for it anyhow they shipped
+their first product right before
+christmas
+and they immediately began to get
+complaints about the video quality
+and they were able to reproduce the
+problem in their lab after some
+investigation they found out that some
+software changes were made right before
+it shipped
+and the testing was all okay
+but it turns out there was some problem
+in their setup and they weren't actually
+testing the new software
+so they ended up actually shipping
+software that was never tested at all
+i have to say after having spent
+so much time in embedded i felt bad for
+the people involved it must have been
+gut wrenching when they discovered
+what had happened but on the bright side
+they were lucky um to find a way to fix
+the problem on the cloud side
+and so it had sort of a happy ending but
+if not for that the ring doorbell might
+not ever have
+succeeded as a product
+so here is a diagram of the setup for
+the hardware and the loop testing
+now this blue box represents the build
+server which is your laptop
+in the middle we see this file called
+base hilt hilt.py this is the script for
+the hardware in the loop test and you
+might recognize that it's written in
+python
+the script can either be run from the
+jenkins pipeline or manually from the
+command line
+now the test script runs two programs
+called p-link we'll talk about these
+more later but they are just serial
+terminal programs and they allow the
+test script to communicate with these
+two hardware boards
+so the nuclio board represents the
+product and this is known more
+generically as the device under test or
+dut
+and the blue pill board is the hardware
+and the loop simulation hardware
+its job is to simulate external hardware
+and in this case just a gpio
+finally i want to point out these xml
+files these are created by the test
+script and they contain the results of
+the test they are in a defined format
+called junit xml
+jenkin supports this format and it can
+display the results of the testing on
+its gui
+here i show in detail the connections
+between the hardware so starting on the
+left we have this laptop with a number
+of usb connections
+for the blue pill board
+which is our hil simulation hardware we
+have usb adapters for the serial link
+and the st-link debug interface as i
+note here we don't need this st link
+interface for cicd operation because we
+don't need to program this board in the
+pipeline it's just a piece of test
+equipment
+for the nucleo board which is our device
+under test we have the usb cable for st
+link
+so as you know the nucleo board has a
+st-link adapter built into it
+this provides the serial link as well as
+the debug interface that allows us to
+program the board
+between the boards we have a gpio
+connection on port b pin 9
+and then we need to tie the grounds
+together
+we also have a loopback connection
+on gpio on the
+product or the device under test this
+loop around connection allows some
+testing even when we don't have the blue
+pill board
+now on the far right is just a picture
+of my setup at the top is the uh usb to
+st link adapter it's a cheap one i
+bought from amazon i think i have it
+connected to my laptop using a usb
+extender cord now it's hard to see but
+the usb to serial adapter cable is uh
+also here and just want to mention it's
+important that it is a adapter for 3.3
+volt signals
+so in the middle here is the blue pill
+board
+and at the bottom is the nucleo board so
+that's
+it i have mentioned several times that
+we will be testing the nucleo board but
+never describe the application
+i originally was using software from one
+of my past embedded classes which worked
+fine but it occurred to me that unless
+you knew that software in some detail
+the test wouldn't be that meaningful
+so i created an application that simply
+allows the user to read and write gpio
+pins via
+serial console commands it's maybe not
+very realistic as a real application but
+it's easy to understand
+so it supports these formats and this is
+the syntax of the commands you can
+configure a port pin read a port pin
+write a port pin
+reset the board
+and get the software version that's it
+we'll briefly look at the software and i
+want to say up front
+i'm not that happy about it i wrote it
+to be easy to understand it's a super
+loop but it has extensive use of
+blocking and that's not a good super
+loop design in my view
+also to make the software easier to port
+to other
+stm32mcus that you might want to do i
+use the stm32 hal uart library frankly
+it is hard to write a good console with
+this library and the code is a little
+ugly but it works
+now a bonus of this application is i can
+also use it on the uh
+hil simulation hardware that runs on the
+blue pill
+now it's sort of weird running the same
+software on both the product and the uh
+simulation hardware
+in fact the application really seems
+more like a test device and a real
+product but of course this is just for a
+demo and that's fine
+now for the test script
+i used python because that's my favorite
+language after c and c plus plus
+the test script basically just sends
+commands to the two boards over the
+serial links and waits for the expected
+responses so it might set a gpio pin on
+one board and read the corresponding
+gpio pin on the other board and make
+sure it has the expected value
+now python has a p expect module for
+this kind of
+stimulus response testing it's based on
+the popular expect tool that i used back
+in the 1990s
+the p-link serial program
+our serial terminal program which comes
+with putty is used
+by the test script to connect to the
+boards
+and the
+[Music]
+python test script records the results
+in junit.xml format that we just talked
+about this is made easy by the python
+junit underscore xml module as we'll see
+in the final course demo jenkins can
+read these files and display them
+i want to very briefly look at the
+application code in the python test code
+of course if you are interested you can
+look at the code in more detail on your
+own
+so here we are in the application code
+in the file app slash gpioapp slash
+appmain.c
+it has a simple super loop for command
+processor which i'll show you
+so here is the main function here is the
+loop
+and the loop basically consists of
+getting a command line
+parsing that command line into tokens
+and then processing the command
+now there's a fair amount of string
+processing code in this file but most of
+it i just copied from previous courses i
+want to show you one more thing
+and that is the processing of the read
+and write commands for reading and
+writing
+pins
+and so the read
+just uses the hell gpio read pin api
+and the right uses the hell gpio right
+pin api it's pretty simple
+by the way porting this code to other
+stm32 mcus shouldn't be too hard since i
+use the hal library
+this code already supports four boards
+if you want to port it i would start by
+looking at config.h
+here is the python test script it is
+under ci cd tools and is called base
+dash hilt.py
+a lot of you might not know python so
+i'm just going to show a few things at a
+high level to give you a feel
+so the first test is
+this is controlled by this function and
+it's just checking for a console prompt
+it basically sends a line here an empty
+line and this function is checking to
+see if it's gotten a
+prompt
+and if it hasn't it means there's
+something really wrong with the the
+software
+and so that's why it's done first
+now i had mentioned the importance of
+checking the version
+so
+uh an input parameter to this python
+script is the versions string it gets
+passed in from the jenkins pipeline as
+we'll see later
+and that version string gets passed to
+this function as tver
+so this function
+sends the version command here to the
+board
+and then it expects to get
+version equals and then tver
+if it doesn't get that
+we're testing the wrong version and the
+test fails
+so now there are a number of gpio tests
+i'd like to show you let's go there
+so
+like you often do in software when
+there's a lot of
+repetition
+i have made these tests sort of data
+driven and that means that we have data
+structures
+that describe a test as a series of
+steps
+and so for each step
+there is the device that you are going
+to talk to which can either be the dut
+or the sim
+the command you want to send
+and then the response you expect
+so for this test
+uh we are
+doing a configuration of a pin on the
+dut
+we are configuring a pin
+on the
+sim
+and these are the these two pins are
+connected to each other
+and then on the d-u-t we write a value
+of one
+and then on the sim we read that pin and
+we expect to get one
+and again then we write a value of zero
+and we read and expect to get a value of
+zero so if everything works and we
+always get the expected values we know
+that the product is working uh as
+designed
+so uh these are simple tests but
+hopefully they give you some idea
+i want to demo the hardware in the loop
+test software so we are in a command
+window here in the project in the cicd
+tools folder where the script resides i
+have the hardware hooked up so we just
+need to run the test script now there
+are various command line options like
+the com ports to use but the default
+values are correct for my setup
+i will just add
+one command line parameter here's the
+script
+i'll add a command line parameter to
+turn
+logging on to debug and then this
+parameter tver you might remember is
+where i set what the software version
+string should be and i happen to know it
+should be this
+this little this python 3 here is just a
+tiny script i wrote to ensure that
+python 3 is being used since i also have
+python 2.7 on my laptop you might not
+need to do this
+so let me run this script
+and there it goes printing out debug log
+and it shouldn't take too much longer
+so at the end it writes those junit.xml
+files or i think just one file but it
+also echoes the contents of that file
+out to the screen
+so
+we can see what those files look like
+and basically it lists all of the tests
+and
+there's no information here so
+uh by implication they passed it also
+prints this little summary that it did
+19 test
+zero were disabled zero errors and zero
+uh failures so that's all good and i
+would just like to scroll up and look at
+some of this uh here's a good example of
+the logging and basically what this
+logging is telling us is what it's
+sending
+and what it's expecting so it's sending
+stuff out to the duty and to the
+sim
+the simulation hardware
+so now what i'd like to do is repeat the
+test but i'm going to remove a gpio
+jumper that'll cause some failures and
+i'm also going to put in the wrong
+software version number so i'm going to
+pause the recording while i remove the
+jumper
+so the jumper has been removed down here
+i have i got the command set up and i'm
+just going to add xxx to the software
+version number to force a failure
+and let's start that
+and this test is going to take a little
+bit longer to run because when it
+doesn't get what it expects it takes a
+few seconds to time out i'm going to
+pause it while it runs
+pause the video recording that is
+okay so the test has finished and this
+time we see some errors first in the
+summary we still ran 19 tests but there
+were five failures
+and then you can see that for some of
+the tests for instance the version test
+there is a failure here listed and the
+the failure is basically saying it
+didn't get the pattern it expected
+and then the same goes for it looks like
+for four the gpio test failed because
+they didn't get the pattern they
+expected
+so that's it for our demo
+here are the prompts for this lesson
+i'll pause just a second and then go
+through them one by one
+if your product has no serial console or
+you didn't want to use a serial console
+could you still do hardware-in-the-loop
+testing
+well the answer is you certainly could
+and the example in this course is sort
+of an ideal case it's quite simplified
+so the details of how you would do it
+depend on the type of i o your product
+has but generally you might make more
+use of the health simulation hardware to
+simulate external hardware
+like sensors and user interfaces if your
+product uses the network for example
+it's iot then you could maybe simulate
+the cloud server as well and this would
+all be under control of the test script
+and as i've said several times keep in
+mind you can always start hardware in
+the loop testing as part of a ci cd
+pipeline
+very simply
+how would you control dut device under
+test sensor readings such as pressure or
+temperature sensors
+well this can be difficult and of course
+it depends on the technical details of
+the device under test and the sensors
+possibilities include one the ideal
+thing is if you can electrically
+uh simulate the sensor to give different
+readings uh for instance if the sensor
+provides different uh voltages
+uh another possibility if that if you
+can't do anything uh physically is to
+provide
+some test console commands on the device
+under tests that allow you to override
+the sensor readings at a low level in
+the software now this is not pure black
+box testing and it's not complete
+coverage but it can still add a lot of
+value
+perhaps you would only do this on the
+debug build
+so this is a legitimate reason why
+people often stay away from hardware in
+the loop because it has some
+difficulties but in my view the tests
+don't have to be a 100 black box to be
+useful
+if you're doing a build in static code
+analysis
+also known as lin detects problems but
+the code compiles and all the automated
+tests passed
+should the build be delivered what are
+the pros and cons of delivering that
+build
+well the pros would be that static code
+analysis problems are sometimes minor
+coding issues not big deals
+and if someone is waiting for that load
+for example let's say it contains a bug
+fix and they're eager to try it out
+just let them have it as soon as
+possible
+the cons would be
+well
+that problem or the problems detected by
+the
+static code analysis could result in
+some subtle problem not detected by the
+automated test and anyone using that
+build could be wasting their time with
+it
+another con is that sometimes
+we just want to be strict we don't want
+to get into the habit of ignoring static
+code
+analysis reports and we sort of say we
+got to fix those issues
+before we deliver a build
+in this lesson the hardware and the loop
+test were run from the build server
+laptop how might you design a system
+that ran the test from a different
+server
+well there's many ways of doing this
+what i would think of is having a
+hardware-in-the-loop script running on
+the build server to communicate with the
+test server and i'm thinking this is
+another physical machine maybe it's
+sitting in a lab somewhere to initiate
+the test and get the result
+so that test server might provide a
+simple rest api to allow the build
+server script to initiate the test and
+get the results so the build server
+hli script might be able to use a simple
+tool like curl for the communications
+so let's briefly summarize this lesson
+we looked at static code analysis as a
+simple method to check for coding issues
+and a good component of a ci cd pipeline
+we looked at a simple example of a
+hardware in the loop test that is driven
+by a python script running on the build
+machine
+we saw use of a hardware in the loop
+simulation hardware board that allowed
+us to control and monitor gpio on the
+device under test
+and we saw use of the junit xml format
+as a way to record test results and
+communicate them to jenkins
+well that's it for this lesson on static
+code analysis and hardware in the loop
+testing thanks for watching

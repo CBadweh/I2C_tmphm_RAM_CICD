@@ -1,0 +1,5 @@
+../modules/stat/stat.c:66:6:stat_dur_init	1
+../modules/stat/stat.c:78:6:stat_dur_start	1
+../modules/stat/stat.c:89:6:stat_dur_end	5
+../modules/stat/stat.c:117:6:stat_dur_restart	5
+../modules/stat/stat.c:148:10:stat_dur_avg_us	2

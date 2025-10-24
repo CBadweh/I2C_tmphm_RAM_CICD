@@ -1,0 +1,388 @@
+hi there my name is gene schrader and
+this is a video course on setting up a
+system of continuous integration and
+continuous delivery including
+hardware-in-the-loop testing this is for
+an embedded project using stm32 cube ide
+and everything runs on a single windows
+laptop
+i don't have to tell you about the
+popularity and usefulness of ci cd so
+maybe you are working in embedded and
+you want to bring this to your project
+or maybe you are seeing this in a lot of
+job descriptions and figure you better
+learn what it's about or maybe you are a
+student studying software engineering
+and want to build a real ci cd system
+in this course we build the entire
+system pretty much from scratch
+i base this course on stm32 cube ide in
+windows since these are commonly used
+especially for people getting started
+and embedded sometimes you hear people
+say that you can't do cicd with a gui
+ide
+well certainly there are some challenges
+working with the ide and i'll discuss
+them but you can do something that is
+quite workable
+personally i worked on a ci cd system
+similar to the one i create in this
+course except for the ide
+starting in 2015. it included jenkins
+and hardware in the loop testing it was
+a large project with many developers so
+code changes were going in at a high
+rate cicd and hardware in the loop
+testing were critical to quickly getting
+feedback on all of that new code going
+in
+so here is a general outline of what's
+in this course and each of these main
+topics is a video so first there is a
+short introduction which is actually
+this video
+then we need to prepare our stm32 cube
+ide project for cicd and this is mainly
+uh just getting the i
+d e project content into a git repo then
+we have to automate the tasks which in
+practice means we create scripts that
+perform the tasks and the tasks are
+building the images doing static code
+analysis programming images to flash
+hardware in the loop testing and then if
+all goes well copying good images into a
+delivery area on disk
+following that we set up jenkins and the
+big thing is we create a pipeline and
+this pipeline essentially is going to
+invoke these automation scripts that
+we've created
+we then also have to create a get hook
+and get that will notify jenkins when
+there's new software to build
+and then finally there are a few
+follow-on topics first i talk about some
+improvements to the cicd implementation
+of this course and things you might want
+to do
+to make it better
+and i also there's discuss a few more
+things about using stm32 cube ide with
+git
+so here's a little introduction
+as i've said cicd
+have well-known benefits please google
+it
+now you might have noticed that the
+abbreviation
+cd is sometimes expanded to continuous
+delivery and sometimes continuous
+deployment i take it as continuous
+delivery and by that what i mean is that
+when new code goes in an automated
+process will automatically generate a
+new software release you know new images
+assuming all goes well this software
+release is then made available to anyone
+who might want it like a tester of
+course a lot of these releases might not
+ever be used by anyone if they're
+created fairly frequently so i see the
+main advantages or benefits of cicd
+being one is it's automated meaning it
+saves work it prevents mistakes it
+prevents people from or doesn't prevent
+but it deals with people forgetting
+about certain things
+it also provides
+early invisible feedback when someone
+puts in bad code the earlier we find out
+the easier it is to deal with the worst
+case is when bad code code goes in no
+one notices and then more code keeps
+going in until finally someone notices
+something isn't quite right and now you
+have to try to figure out you know when
+did it happen and uh and fix it as i've
+previously mentioned uh there are
+challenges with ci cd if you're using a
+gui ide and this is because tasks that
+are often done with mouse clicks like
+doing a build must be automated we have
+to figure out how to do that now with
+stm32 cube ide it does provide some
+options and we'll be looking at those
+and hardware-in-the-loop testing
+is also
+challenging can be challenging it
+depends a lot on what your hardware does
+and one thing you might have to do
+is if your system interfaces with other
+hardware which is quite common you might
+need to simulate that have some external
+hardware to simulate it
+now in this course i built a demo system
+to provide ideas of what might be done
+so the one thing you need to keep in
+mind is that doing just a little is
+better than doing nothing for example
+just running static static code analysis
+on the code base after every change
+provides early invisible feedback and
+the developer that added the code
+hopefully still remembers it pretty well
+and so they can fix issues
+the other thing is if you start small
+you can always add additional
+features over time like anything else
+and finally
+cicd and hardware and loop testing can
+become part of the development culture
+meaning when you start adding new
+features to the product you will you
+know automatically think about how can i
+test this in an automated way and maybe
+you develop those tests as you develop
+the code and you use it as part of your
+development
+here i give a visual diagram of what we
+are building you'll notice all of this
+is on my laptop while in the real world
+this would be maybe on different servers
+some of this would be in the cloud
+so starting at the lower left we have
+the developer using stm32 cube ide and
+within the ide is the tool chain
+and an ide project
+within the project you can see a git
+repo which contains the working copy of
+the code
+and
+any other project files like make files
+now not all of the project is in the
+repo
+for example the build output files like
+the flash images and map files
+are in the project but they're not
+stored in the repo
+at the top here is the git server which
+contains the official copy of the code
+from a developer viewpoint this is known
+as a remote repo
+so when you make code changes and then
+and you've done your testing and they're
+all good to go you push the code up to
+the server
+i say here that the server is a little
+like github i didn't actually use github
+here because i want to keep things as
+simple as possible
+with github we have to worry about
+security and we also
+have to
+deal with uh some issues of of
+installing a uh git hook to do this web
+trigger
+on the lower right we have our build
+server it receives triggers from our git
+server and it um
+here shown here and it also fetches code
+from the git server
+so it contains the jenkins program
+within jenkins is the concept of a
+workspace
+uh where the software is copied and
+built so we see that there is a git repo
+within that workspace that jenkins has
+fetched
+you'll see here i also show
+stm32 cube ide in the build server now
+the build server doesn't really use the
+ide except for the tool chain which
+contains the compiler and linker
+so this id doesn't have to be running
+now i put this ide in
+dashline since we're on a single laptop
+and this in practice is the same ide
+as we show over here
+now i show both the developer and the
+build system of having
+product hardware
+and there's also
+a hardware and loop simulation hardware
+which is another board that i use in
+this course and that board um allows me
+to control and monitor gpio as part of
+the testing now the developer needs this
+hardware obviously to develop their
+software and to develop automated tests
+and the build server
+needs this hardware to
+do the hardware and the loop testing now
+i only have one set of boards in reality
+and so as i note here these might be the
+same uh actual physical hardware i just
+have to be careful that i'm not doing
+anything with my hardware when jenkin
+jenkins is doing a run and in practice
+that's not difficult to do finally in
+the upper right i show a software
+release store for this course
+that is nothing more than a directory
+structure on my laptop where software
+releases
+image files in particular
+get copied if if they are successfully
+built and tested
+so how does this work well we start here
+as a developer and you make some changes
+and you test them and so forth maybe
+they get inspected and whenever thing is
+ready you push your code up to the
+github server or the git server not
+github and typically this is on the
+master branch if you know git
+the
+git server will
+through a hook will trigger jenkins to
+tell jenkins it's time to do a build
+jenkins will then pull the code down
+into a workspace and it'll build it
+it'll do static code analysis it'll
+program it to flash on the board run
+some tests and if all goes well it'll
+copy it up to the software
+release store to make it available
+by the way if there's a failure it will
+send an email to me in this case telling
+me that a build failed so that's it
+now for prerequisites i want to say
+there really aren't any certainly it's
+not like my other courses where knowing
+c was important
+in this course we'll be looking at just
+a small amount of c
+now there are things that would be
+helpful to know
+one is the concept of source code
+management and git in particular this
+course is not meant to teach you source
+code management and get from scratch i
+will explain what i'm doing along the
+way and i don't think i will skip any
+steps
+so you could use this to help learn
+about source code management and get but
+it would be helpful probably to look at
+some other materials in parallel
+this course also requires windows batch
+scripts because that's how we automate
+things
+so
+knowledge in this area will be helpful i
+am no expert on windows batch script so
+i think mine tend to be fairly
+simple
+and then finally it would be good if you
+have used stm32 cube ide even a tiny
+amount to know what it's like to create
+a project again it's not that critical
+so here are some other tools and
+technologies used in this course just so
+you have an idea of what's coming i
+won't go through this list in detail
+i'll pause here for a second and you can
+pause the video if you'd like to look at
+it a little bit more
+here is the hardware and software i used
+i use a basic nucleo board with a cortex
+m4 processor for the product now to test
+the product i need to manipulate some
+gpio so i use a stm32 blue pill board as
+the hil simulation hardware
+i chose these boards more or less at
+random based on what i had if you have
+similar boards
+you could use them i tried to make the
+software as portable as possible to
+other stm32 boards but it will likely
+take
+a small amount of work
+if you don't have a second board like a
+blue pill to support hil testing that's
+okay it just means some of the hardware
+in the loop test
+can't be run
+now you could actually do this course
+with no hardware uh what will happen is
+um after we set up everything and we set
+up jenkins the builds and the static
+code analysis uh parts will work
+and uh but as soon as
+it gets to the uh programming the flash
+then obviously the jenkins uh pipeline
+will fail
+so the bluepr blue pill uh don't include
+uh an st link adapter like the nucleo
+boards do so i had to
+provide my own st link adapter for
+programming the flash on it i just used
+one of the cheap ones that i believe i
+found on amazon and i also had to
+provide a usb to serial cable adapter
+for my serial connection and of course
+there's just a few jumpers for the gpio
+in terms of software here is the list
+i included the version numbers of what i
+used but i don't think the version
+numbers are critical
+the exception being python it might have
+to be
+3.x i don't think 2.7 will work it may
+so i'm just going to pause here for a
+second in case you want to look at the
+software list
+here are a few administrative notes
+youtube does not allow you to easily
+update videos
+so any corrections or clarifications to
+lesson videos are put in as video
+comments pinned at the top
+so here is where you would find the repo
+for this course for the main nucleo
+board here's another repo for the blue
+pill hardware and the loop simulation
+hardware
+and finally feedback on this course is
+very welcome
+detailed
+technical comments corrections questions
+uh ideas or suggestions for other
+courses
+anything you'd like to say you can put
+this in as youtube comments or you can
+dm me on reddit here's my id
+so i have just one prompt for this
+lesson so i'll do it right here the
+prompt is the diagram in this lesson
+showed a single developer is it that
+useful to do ci cd and hardware in the
+loop testing if there's only one
+developer
+well my answer is of course automation
+is almost always useful it helps prevent
+you from forgetting things and having it
+double check your work gives you greater
+confidence in the software
+it is true that cicd might be more
+valuable with multiple developers
+because you tend to have more issues
+with unexpected interactions
+between each other's work
+we'll talk more about multiple
+developers at the end of this course
+so that's it for the introductory lesson
+thanks for watching

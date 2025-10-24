@@ -1,0 +1,230 @@
+in this final video lesson we look at
+some next steps for the cicd system
+we've created first there are some
+potential pipeline improvements to move
+closer to a production grade system
+and then regarding stm32 cube ide so far
+we have focused on a single developer i
+want to talk a little bit about having
+multiple developers working on a common
+project
+listed here are some ideas for
+improvements that would bring the
+pipeline closer to a production grade
+system this isn't a complete list but
+are things that first came to my mind
+the first two involved replacing the
+very simple remote repo on our laptop
+that was fine for our demo but not
+realistic for a production system
+now one option is to create a
+network-based private git server for the
+remote repo
+it could be on a physical server or in
+the cloud
+in either case may be running in a
+docker container
+in contrast what was done
+for the demo
+we need to have a secure interface with
+keys
+the nice thing is that from a developers
+and from jenkins viewpoint this should
+just be a change in the url for the
+remote repo
+so an alternative
+is to use github
+again it will have a secure interface
+with keys i think github basically
+forces this to be done these days
+one challenge will be to figure out how
+to get a wet web hook trigger from
+github to your build server possibly
+passing through a firewall
+now i believe github actually has the
+ability to do builds
+i'm not sure how this works with
+embedded but it would be something to
+look into of course we also have to
+consider how we would do our hardware in
+the loop testing
+so the next improvement is a system i
+have seen a few times
+in this class when we had some code
+ready we would simply push it to the
+remote repo
+in this case you do something similar
+but the code actually doesn't go into
+the remote repo at least not on the
+official branch until the pipeline runs
+without error so it prevents or tries to
+prevent bad code from ever getting in i
+don't know how these systems work
+exactly the first step is to research
+this a key to this being successful and
+i can speak from experience is to ensure
+that the automated test and the pipeline
+in general are very reliable it can be
+frustrating to developers and hurt
+productivity if their submissions get
+rejected due to some
+build issue unrelated to their code
+and the final improvements listed here
+is not a not big ones it is more
+security improvements relating to the
+web hook build trigger and the email
+notification system they need to be key
+based and not be using passwords
+the final topic i want to discuss is
+having multiple stm32 cube ide
+developers so far we have really just
+focused on a single developer so i'll
+start with a picture it's a lot like the
+other pictures you've seen except now we
+have the second developer
+so on this picture we see several copies
+of the repo the official one is up in
+the git server
+the
+jenkins has a copy of the repo it's sort
+of a read-only version it doesn't change
+it and then the developers have copies
+of the repo which they are um
+potentially changing uh simultaneously
+and at various times pushing it back up
+to the uh remote repo
+so this looks like a great setup and use
+of git
+but there are potential issues related
+to some ide related files in the repo so
+let's look at that
+so here are some issues
+one is that storing ide
+project properties or settings files in
+the repo could be an issue if these
+files contain data that is specific to a
+developer's local environment and the
+example i give is that the settings file
+has full path names in it so i saw an
+example of that in the dot mx project
+file and and that was of concern
+now one simple and practical solution
+might be to have all project folders be
+at a fixed location for all developers
+so in other words as a project you get
+together and say everyone needs to put
+their cicd class
+1
+ide project folder at this location and
+then of course the problem goes away i
+don't know if this solves everything but
+it is certainly something to look at
+now there could be further issues if
+properties and settings files that are
+logically the same are not literally
+identical
+so an example would be a settings file
+where the line order is not fixed it's
+somewhat random and so you have two
+developers who have identical settings
+but their settings file
+is not literally identical
+so the problem is this could result in
+some settings files being what i call
+whip solid as diff different developers
+push
+changes to the remote repo so developer
+a
+pushes their changes with a particular
+settings file developer b now pushes
+their changes and even though the
+settings are the same their settings
+file looks different and so that goes in
+as a change um from a git viewpoint and
+so if you look at the history of that
+repo you see this uh settings file being
+changed all the time
+and that
+maybe would work but it isn't ideal
+so
+in general more investigation is needed
+to understand these kind of issues uh
+perhaps a little googling will uncover
+the answers to this because of course
+this is uh you know lots of people must
+have run across this
+one thing i occurred to me is it might
+be
+advantageous to layer the project files
+into several repos and i'll show you
+that now
+in this diagram i show a layering of
+files in the project folder each layer
+is potentially stored in a different git
+repo
+so at the top layer we have the
+application code that is hand written or
+at least not supplied by the ide
+obviously these files will be exactly
+the same for all developers
+now this code is typically hooked into
+ide generated code in a small number of
+places for example main or maybe
+exception handlers we saw that in this
+course
+it may be that this software is common
+to multiple mcus for example there will
+be if depths to handle different mcus
+and thus this code might appear in
+multiple ide projects that might be
+another reason to keep it in a separate
+repo
+the next layer down is the ide
+maintained files that should be
+identical for all developers
+so this includes the ide generated code
+and the source code that is
+copied into the project for example from
+libraries
+the make files the linker scripts and
+other build files that are generated by
+the ide
+and probably this hardware configuration
+file it's a dot ioc file
+with this exception these are files that
+are needed to do a build
+and then the final layer or the lowest
+layer are files that might have some per
+developer differences
+so a key thing about these files is
+they're not required for cicd builds all
+you need is the code and the make
+files
+so these could be stored in a per
+developer repo
+or a single repo with per developer
+folders
+now each developer in this case would
+have to ensure that with their ide
+properties and settings repo
+that if they generate
+the code up in this layer here they will
+get the same generated code as everyone
+else that's a key uh
+requirement for this to work
+so if you were to do something like this
+it would require a method to layer these
+repos in the ide project folder and so
+you would have to have the methods on
+how you make changes and how you push
+changes how you handle changes that have
+to be coordinated between different
+layers
+so it sounds like an interesting project
+i haven't done anything with it but i
+wanted to present these ideas
+well that is the end of this lesson and
+the end of the course on embedded ci cd
+with hardware in the loop testing i hope
+you found it useful and again thanks for
+watching

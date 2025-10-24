@@ -1,0 +1,12 @@
+../Drivers/CMSIS/Include/core_cm4.h:1657:22:__NVIC_SetPriorityGrouping	1
+../Drivers/CMSIS/Include/core_cm4.h:1676:26:__NVIC_GetPriorityGrouping	1
+../Drivers/CMSIS/Include/core_cm4.h:1816:22:__NVIC_SetPriority	2
+../Drivers/CMSIS/Include/core_cm4.h:1838:26:__NVIC_GetPriority	2
+../modules/os/os.c:110:9:os_get_def_cfg	1
+../modules/os/os.c:126:9:os_init	1
+../modules/os/os.c:139:9:os_start	7
+../modules/os/os.c:166:9:os_run	1
+../modules/os/os.c:171:6:os_dump	2
+../modules/os/os.c:197:27:timer_callback	2
+../modules/os/os.c:216:16:cmd_os_status	1
+../modules/os/os.c:232:16:cmd_os_test	11

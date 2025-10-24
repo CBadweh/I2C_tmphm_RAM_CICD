@@ -1,0 +1,265 @@
+this is a short lesson where i cover a
+few more small topics that i believe are
+relevant to this course
+and they are asserts and audits
+and i really just want you to be aware
+of these tools as they might be
+something you want to use in your work
+so now asserts in a software assert you
+state a condition that should be true
+like the value of a variable here we're
+saying that pointer underscore var
+is not equal to null
+now traditionally in unix which is where
+i think asserts originated a failed
+assert caused the process to abort and
+now that's a pretty
+drastic action
+in projects i've worked on generally you
+have your own assert macros and you
+might have several with different
+failure actions
+so one might be
+if it fails just log an error
+including the file name and the line
+number and continue on
+another is to generate a function return
+statement with a
+return error code specified in the macro
+so if the assert fails you do a return
+and you let the caller deal with the
+failure code
+and then another possibility is you
+declare a fatal fault this is comparable
+to the abort in linux and we'll see a
+sample of that in just a second
+so asserts are clearly very use very
+useful during development and testing
+they're fast and easy to write
+they provide the exact location where
+the problem was spotted
+i find that asserts
+use of asserts really varies among
+projects and among developers
+sometimes they're never used sometimes
+it seems like every function has some
+asserts in it
+they're very commonly used at the
+beginning of a function to
+validate the function arguments
+so
+you know a possible assert macro for
+this course and this is just sort of
+simplified would be this uh where you
+would say assert underscore
+fatal which gives the uh the developer
+just make sure it's clear that if this
+assert fails we're gonna the system's
+gonna
+reset and you give the condition which
+is c code and so the macro expands if
+that condition is not true
+then what we're gonna do is call fault
+detected it's an api on the fault
+module
+and
+i'm assuming here we've added a new
+fault type which is called assert
+and then there's a a
+a parameter we can pass it's just a uint
+32
+and i thought maybe there would be
+something like a file id
+you shift that over by 16 bits and then
+add the
+line number to it this is a predefined
+macro
+and uh and
+this function will never return this
+fault detected will never return but
+you'll get a complete fault report on it
+as i mentioned i think everyone agrees
+that asserts are great for development
+and testing but when it comes to
+production or release builds it is not
+so clear-cut
+traditionally for production or release
+builds the assert macros
+don't do anything in other words they're
+nulled out no code is generated
+due to those macros the idea being that
+the assert code has served its purpose
+and so we can save some time and space
+by compiling them out
+so should this be done or should the
+asserts be left active just like in uh
+debug builds there are a lot of opinions
+on this subject
+so my view is it you know depends a lot
+on your product and and the nature of
+the application
+so for safety critical application use
+of asserts and production builds might
+be fully justified
+the argument being anything out of the
+ordinary might be reason to go to a
+fail-safe state
+and also something that seems minor
+might be the symptom of a more serious
+problem if you haven't seen it in
+testing um and you're seeing it in the
+field you know that that
+should get you thinking
+so i worked in in robotics for some time
+and
+in that um
+in that product um it was somewhat like
+this there was a little tolerance for
+anything out of the ordinary pretty much
+anything went wrong you shut down
+so for applications where safety is not
+an issue
+um use of asserts might be inappropriate
+so it might be that you just need to do
+more sophisticated error error handling
+you shouldn't be depending on asserts
+for that the assert is a pretty
+primitive tool it's pretty black and
+white
+so the idea is you want to avoid
+unnecessary recovery actions as that's
+going to hurt your availability and it's
+just
+you know
+doesn't help the
+perception of your product so i once
+worked in a very complex communication
+product that used lots of asserts it was
+part of the development
+culture
+and it went to the field with asserts
+enabled i don't know if that how that
+decision was made or whether it was even
+a conscious decision but that's what
+happened
+well with that kind of product what
+happens in the field is so much
+different and complex than test labs
+it's just the nature of of that kind of
+system so we were experiencing recovery
+actions resets of different levels due
+to asserts and it turned out that uh
+some of these uh recovery actions were
+unnecessary the asserts needed to be
+replaced with better error handling and
+of course that's what was done
+but there was some pain experienced
+along the way uh one other thing i just
+want to mention that that comes up if
+it's a performance oriented product
+where you just need every bit of cpu you
+can get then
+the view is asserts are using re using
+resources and they're doing no
+productive work so this is just another
+factor to consider so in summary asserts
+are a great tool
+but when it comes to production builds
+you need to think about some of these
+things
+so now audits audits refer to software
+that checks the integrity of the system
+doing things like checking critical data
+structures and memory
+for things like valid values uh pointers
+indices not necessarily an exhaustive
+check but just uh things that would be a
+big problem uh if if they occurred
+another thing is comparing the
+configuration data that's being used in
+working memory versus the configuration
+database if they mismatch um you know
+you've got a problem another thing is
+checking resources such as heap work
+cues looking for orphan nodes in a tree
+structure for example
+and another big one
+if you have file systems is how much
+space do you have left in the file
+system
+for instance slash var and linux so many
+times i've seen systems that start
+having problems after running for you
+know six months or whatever and it's
+because a file system filled up and the
+system uh started uh behaving
+erratically you might remember that
+there was a mars named spirit
+uh i think it was early 2000s and it had
+a big problem after it landed because
+during the trip from earth to mars uh it
+did some sort of background work and it
+filled up a file system so slowly over
+time and they never ran the system for
+that period of time so they didn't know
+about this
+fortunately they were able to fix it
+from earth
+so the purpose of the audit is to find
+problems that might not be visible but
+would result in incorrect operation or
+that
+may cause stability problems and perhaps
+in the near future
+audits might run on a schedule you know
+every n minutes or every are hours or
+maybe during periods of low processing
+audits can be correcting
+meaning
+they detect and they fix the problem on
+the fly and some things you could
+imagine being auto correcting would be
+cleaning up a file system
+maybe correcting configuration settings
+in working memory and making sure they
+agree with what's in the configuration
+database
+now you have to be careful with
+correcting audits because sometimes it's
+not so simple just changing things in
+memory um
+you just have to think about it
+so a failed audit can lead to different
+kinds of actions uh one is maybe it's as
+simple as just logging an error or
+warning and going on and this would
+especially be the case for correcting
+audits uh if the system has the concept
+of alarms you might want to set an alarm
+to
+have the
+the operator of it check and see what's
+going on
+now if the system is if the auto
+uncovers something serious and the
+system is in big trouble you might
+declare a fault and go through an
+automatic uh recovery you know which is
+possibly a full reset obviously
+you don't want audits that are trigger
+happy because this is being done
+automatically you just have to be very
+cautious you don't want to get in a case
+where you're
+constantly resetting
+so in our software architecture your
+audit could invoke default module
+that api that declares a fault this is
+sort of like i showed for an assert in
+the previous slide
+so this is the end of the lesson and it
+is the last lesson in the course on
+reliability availability and
+maintainability as i said at the start i
+find this a fun topic and i hope you
+found it useful thanks for watching

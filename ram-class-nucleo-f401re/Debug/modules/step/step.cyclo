@@ -1,0 +1,12 @@
+../modules/step/step.c:148:9:step_get_def_cfg	1
+../modules/step/step.c:195:9:step_init	1
+../modules/step/step.c:224:9:step_start	1
+../modules/step/step.c:287:9:step_queue_cmd	1
+../modules/step/step.c:336:9:step_get_free_queue_slots	1
+../modules/step/step.c:374:9:step_set_position	1
+../modules/step/step.c:391:9:step_energize	1
+../modules/step/step.c:427:9:step_get_info	1
+../modules/step/step.c:450:9:step_set_drive_mode	1
+../modules/step/step.c:510:27:timer_callback	1
+../modules/step/step.c:646:16:cmd_step_status	1
+../modules/step/step.c:694:16:cmd_step_test	3

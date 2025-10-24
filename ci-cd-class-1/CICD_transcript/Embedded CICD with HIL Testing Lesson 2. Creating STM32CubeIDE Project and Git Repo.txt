@@ -1,0 +1,295 @@
+00:00 in this video lesson i create an stm32 cube ide project and set it up with git
+00:07 for source code management using a source code management system is step one for doing ci cd and even if you
+00:14 don't do ci cd you should be using source code management so here is a brief outline of the lesson
+00:22 i start with some background on stm32 cube ide like what are the major components and what kinds of software
+00:29 and files make it up to be clear this is not a tutorial on this ide i assume you know a little about stm32 cube id and
+00:37 ideally have used it at least a tiny bit then i create an ide project and go
+00:43 through the mechanics of creating a local git repo that will contain our ide project
+00:49 next i go through what could be viewed as a git server and it contains what is called a remote repo this repo is the
+00:57 official storage place for the project and is how code is shared between developers as well as with jenkins
+01:05 after i create the remote repo the final step is to push the contents of the ide
+01:10 project local repo to the remote repo by the way i believe there is an stm 32
+01:18 cube ide plug-in for git allowing you to do git operations from the ide gui i
+01:25 didn't go that route for a couple reasons first i think it's important to know get at the command line and this
+01:32 whole course is about moving away from the gui and to the command line also i have used gui's that supported
+01:39 get and often i found myself just going back to the command line because i was
+01:45 more confident in what was going on so to make it clear here's a diagram of
+01:51 the project i showed in the introduction video what we are doing in this lesson is in this dotted oval so that is the
+01:59 ide project the local repo and then the remote repo so let's get
+02:05 started here is a diagram i created to illustrate the parts of the stm32 cube
+02:11 ide it's kind of busy but it helps to understand a little bit how it works in order to use get and to create
+02:18 automation scripts so on the left side we have the common parts of the ide and
+02:24 on the right side we have an ide project so starting up here we have what i call
+02:30 the ide system the first thing i show here is the eclipse ide base this is a
+02:35 big piece that includes all of the common infrastructure for an ide the rest of the stuff is
+02:41 specific to stm32 first we have a database of all the mcus
+02:47 and boards that are supported this database contains all the pin out and hardware information for those mcus and
+02:52 boards then we have the pin and hardware configuration editor where we enable peripherals assign pins
+02:60 choose startup or choose software options and so forth and we have the code generator which
+03:06 generates code based on the project mcu and the hardware configuration and finally we have support for the st link
+03:13 debugging interface next we have ide provided source libraries first there are libraries for
+03:21 interfacing to the hardware like a ur or an ie squared c and these are often
+03:26 called driver libraries stm32 has two styles one called hell one
+03:31 called ll or low level and you often get to choose between them
+03:36 there's another driver library called census which is
+03:42 more generic not just st and it's supported by other
+03:47 suppliers then there are middleware libraries for things like rtos or maybe a file
+03:54 system or tcpip stack the ide copies these software libraries
+04:01 into your project as needed based on which ones you've chosen notice i've shown multiple
+04:08 copies of these source libraries this is because different mcus have different libraries so when you create a project
+04:14 for a particular type of mcu the ide will download the correct version of these libraries
+04:21 at the bottom here are the mcu tool chains these are things like the compiler the linker and standard c
+04:28 libraries the standard c libraries are for things like printf
+04:33 math functions and string functions typically these libraries come with the tool chain as i show here
+04:39 now just like the ide provided libraries there are different versions of the mcu
+04:45 tool chains for the different mcu types you might have in your projects
+04:50 now let's move to the right side here i show a project in light green and of
+04:55 course there can be multiple projects a project is contained within a particular workspace and as i show you can have
+05:02 multiple workspaces on your laptop both workspaces and projects have a top level
+05:08 folder that holds the contents of that project or workspace so let's look at the contents of a project
+05:15 i first show the pin and hardware configuration settings these are stored in a file with
+05:21 a dot ioc suffix i think ioc stands for i o configuration but i'm not sure
+05:28 then we have the generated initialization code the make files the
+05:33 linker script these are all generated files produced by the ide system as shown here
+05:40 and we have the ide provided source libraries which are just copied in
+05:45 we also have several properties or settings files that are managed by the ide system so when you change things
+05:54 using the properties window for your project the changes are stored here these settings can affect generated
+06:00 files like make files these set the settings files generally start with a dot so they are sometimes
+06:07 hidden in directory listings next we have your files the application code files are ones you've created
+06:14 yourself the ide has to be aware of these to include them in the build through makefiles but otherwise the ide
+06:21 doesn't do much with these files of course it allows you to edit them along with the application i include build and
+06:27 test scripts this is for the ci cd pipeline including things like the build script we'll be looking at later in this
+06:34 course following this are the build output files including object files map files
+06:40 and the actual image files as shown they are created by the tool chain
+06:48 so on the right here i indicate which of these files need to be in source code
+06:53 management meaning the git repo now it's pretty much everything except the build output files which are not
+06:59 source code and build output files can be regenerated whenever you want by doing a build so you don't need to store
+07:05 them at the end of this course i'll discuss this topic a little bit more and in
+07:11 particular these properties files here i drill down a little more on the
+07:18 stm32 cube ide project folder in this case ci cd class 1.
+07:24 you can see that this project folder is inside a workspace folder within that workspace folder there is some metadata
+07:31 for the projects within it i haven't really investigated too much what is in that metadata
+07:37 now we have in the projects folder a dot settings folder which contains project
+07:43 settings then we see two folders i created in red one is for the code files i wrote the
+07:50 app folder and one is for cicd build tools we'll be looking at these things
+07:56 in later lessons so of the remaining folders and files if you look at the ones where the
+08:04 text is black that being core drivers middlewares
+08:09 and these files these are all generated or supplied by the ide so they
+08:17 are either code or project settings or files needed to do the build like for instance this linker script down here
+08:24 this leaves two remaining folders the ones in green and they are they are debug and release
+08:30 these are where the debug and release builds are done so these folders contain build output files like object code and
+08:37 images but they also contain all of the make files that are generated by the ide
+08:43 and used to do the builds so regarding the git repo everything you see here goes into the
+08:50 repo with the exception of debug and release
+08:56 in the debug folder for example the make files and a few other files
+09:02 needed for the build go into the repo but not the build output files and the same is true for the release folder
+09:10 so now let's create the stm32 cube ide project and the git repo
+09:16 now this could be done fairly quickly but i'm going to do it in smaller steps to provide a little more of a learning
+09:22 experience so this is the plan we create the ide project and as soon as
+09:29 we've done so we immediately create a local git repo and we commit the initial
+09:34 project files to that repo after that we construct the project in
+09:39 steps for example adding application code and we commit the changes to our local
+09:46 git repo as we go so what this means is the git repo will create a record of how the project was
+09:53 built up and this isn't necessary but i thought it might be useful so finally we create the remote repo and
+10:01 we push our local repo to the remote repo so here are some suggestions and notes
+10:08 first i suggest you create your own ide project and get repo as described in
+10:13 this lesson and not simply copy my repo from github and and try to import it
+10:19 however i did write some code and cicd scripts for this course and you might want to
+10:26 use mine of course you might want to use some of your stuff it really depends on on how you
+10:33 want to do this course and how much work you want to put into it if you do want to use my code in my scripts then my
+10:39 suggestion would be to clone my repo to some temporary location on your laptop
+10:45 and copy the application code which is the app folder and the cicd tools which is
+10:52 the cicd tools folder into your ide project from that
+10:58 repo that cloned repo one other thing i'll mention pretty obvious you'll see a lot of path names
+11:04 in here these path names have my login and so forth in them because they're just what i did on my worktops on my
+11:11 laptop so obviously those won't match what you're doing and then finally i mentioned a couple
+11:16 handy get commands that we'll use in this lesson and that i use all the time when i'm
+11:23 working and one is git status dash u it shows you a list of files that have been
+11:30 modified uh or created in your workspace and so i use that as you know i i want
+11:36 to make sure that the files i modified are the ones i thought i modified and and it's usually to make sure i didn't
+11:42 modify something by accident i don't want that to go in to a commit and also just see new files
+11:48 the other very handy command is get diff you can just see the differences between the the
+11:55 files as they currently exist in your workspace and and the previous
+11:60 version you can also use git git diff to do the differences between commits um if
+12:05 you want to look back in history i don't do that nearly as often so let's get started step one is to
+12:12 create the stm32 cube ide project in my introductory course on stm32 embedded i
+12:19 go through this in detail but here i just provide the basic steps and the information here is specific to the work
+12:26 i did like the particular board hardware so then step two is to create our local
+12:33 git repo so i go to a windows command window icd to the project folder and create the
+12:40 local git repo so here are the commands to do that here's the cd get init creates a local repo
+12:47 now git needs a a username and email address i think just for logging
+12:52 purposes and normally you can have global settings for this and you don't have to
+12:57 enter them when you create a new repo but in this case i wanted to make
+13:03 them specific for this repo and the reason is i have a a special email address for this uh class and we'll see
+13:11 this email address later so we need to create the dot git ignore
+13:17 file it's an important file in get and so let me tell you about that
+13:22 the get ignore file contains file name patterns often using wild cards that
+13:27 should not be stored in the repo and this is why we're telling git to ignore them so in our project ignored files
+13:36 are generally build output files like the flash image file we discussed these
+13:41 kind of files a few minutes ago ignored files will not show up as untracked files when running a command
+13:48 like git status dash u and that's what we want we don't want to see them so here is the git ignore file for this
+13:56 course now this file the contents of it is based on experience because i know a lot
+14:02 of these what the output files look like now if there is one in here i didn't know about
+14:08 let's say i didn't know that star.su is a build output file what
+14:13 would happen is i'd be working and i would do a git status dash you and i would see a bunch of these files as uh
+14:20 untracked and i would say oh what what are those should those be added to the repo
+14:25 and i'll do some investigation and say no those are build outputs i don't want them in the repo and so i'd add them to
+14:31 the dot get ignore so i wouldn't see them anymore
+14:36 the other thing i want to show you here's a special line this exclamation point is sort of an exception to the rule
+14:42 generally i don't want list files those are build output files i found out the
+14:47 hard way though that the ide creates a file called objects.list that is required to do a build and so i had to
+14:54 put an exception to that rule so it does because it does get added to the repo
+14:60 and then these this is files down here test results star.xml
+15:05 if you happen to run hli testing in your workspace it will generate those files
+15:10 with the test results and you don't want those in the repo so going back
+15:17 now that we have that created the next step is to add all of these files to the repo
+15:25 and we do a git add dot and that means add all
+15:30 untracked files that are in the current directory or in subdirectories and then finally we commit
+15:38 the these files means we're adding them to the uh repo and um when i
+15:45 do this on the command line i usually put the comment of what the commit is all about on the command line as well
+15:51 and so in this case i just say we created the project
+15:57 here i am in a command window just after creating the ide project i want to quickly go through the git command so
+16:03 you can see them if you want to take a closer look you might need to pause the video because i'm going to go through it
+16:09 fairly quickly so here's a directory of what it looks like just after we created it the only
+16:16 change is i have already created the dot get ignore file so we can uh just
+16:23 look at that and there it is so first thing i need to do is create the repo get init
+16:30 now i can do a get status dash shoe and it's showing a lot of untracked files
+16:37 so the next thing i want to do is that git config to add my
+16:43 username and my email address and i'm i just i'm going to cut and paste those in so i
+16:49 don't make a mistake they're in the typing
+16:55 okay now uh again that shouldn't have changed anything git status actually looks the
+17:00 same now we're ready to add the files to the repo so git add dot
+17:08 it's uh warning us about carriage return line feeds uh this is the whole thing about
+17:14 carriage return line feeds between linux and windows so
+17:19 now that we've added those i can do another status statue now it
+17:24 says those are new files and they're ready to be committed so
+17:30 we are going to do our commit ide create project
+17:37 so it's just added them to the repo now we do a get status dash you
+17:44 and it says we're on the branch there's nothing to commit so we are now in sync the files are in sync with the get repo
+17:51 the local one now we need to integrate our application code and the cicd scripts
+17:58 i'll talk about the actual application in these scripts in later lessons but we'll put them in the repo now
+18:04 so we create the app in ci cd tools folders and we copy files into them
+18:12 we need to add the code in the app folder and make it part of the project so the ide will build it so to do that
+18:20 we right click on the app folder and in resource configuration we unexclude it
+18:26 from the build finally we have to hook our application into main uh by modifying
+18:34 this file core source main.c which the ide generated and we add our function in
+18:40 there so here's what we do in the while loop the sort of the super loop uh we
+18:45 declare the the function and then we call it so that's fairly straightforward
+18:51 so once that is done we want to add this work and commit it into the
+18:57 repo the git repo so we do that as shown here the next thing we do is we do a debug
+19:04 and release build to ensure that the code builds it should and that the make files and other build build files are up
+19:11 to date then we want to commit that work so again we do a git add and a git
+19:16 commit here i am in the ide and i've already added the application folder and the
+19:23 cicd tools folder here and i've also brought up main.c and i
+19:30 can show you where i've added in the hook to the application this is the generated file and i'm calling the
+19:36 application code app underscore main and i have the c file that contains app underscore
+19:43 main so this is the main applica application function the last thing i want to do is make sure
+19:51 that the code under app is part of the build so i right click on that i go from
+19:57 to resource configuration exclude from build they're both checked as if this folder is excluded from the build
+20:04 i don't want that so i deselect them i say okay and now that code will become
+20:10 part of the build here we are in a command window in the project top level folder let's see what
+20:17 has changed from a get viewpoint
+20:22 so first of all there are a bunch of untracked files that git is unaware of these are the files we copied in in the
+20:29 app folder and the ci cd tools folder we modified main.c to add that hook in
+20:35 and then we also modified a settings file and that was when we made the app folder part of the build
+20:43 so we want to add these new files and the changes so first we
+20:48 stage them now if i do a status dash you
+20:55 it shows its stage some modifications and some new files
+21:01 so now we want uh to commit those and i'm going to cut and paste that command in
+21:08 okay and now we can do a get status dash you and everything is up to date
+21:15 so now i'm going to pause the recording and do the debug and release builds in the ide
+21:22 well the builds are done so let's see what happened
+21:28 and you can see again a bunch of untracked files and these are all make
+21:33 files so when i did that first build it created all the make files and we want to add all of these so
+21:40 [Music] do a git add and again it's uh warning about the
+21:46 carriage return line feeds that's sort of normal and then i will well before i
+21:52 do the commit i will do another get status
+21:57 and now you can see all of the files are ready to be uh committed uh by the way a
+22:03 settings file changed i don't know what what the what exactly that was caused by but it's
+22:10 fine so now we can do a a git commit
+22:18 and there's that and now we do look at status and everything is up to date
+22:25 so now everything is in our local repo it's ready to go so the next step is to
+22:30 push the contents of our local repo into the remote repo
+22:36 but that remote repo doesn't exist yet so we hold off on this step until we create the remote repo
+22:43 so going back to this diagram again we have created this repo it's all ready to go and we want to push it to the remote
+22:51 repo up here and so this is what we're going to create and this is needed because this is where
+22:56 jenkins is going to get the code from so let's create the remote repo i put
+23:03 the word server here in quotes because it's like a server but it's actually running on our laptop
+23:09 so the remote repo is a actually a bear get repo that's another term and that's
+23:16 the normal method used to share code among users including jenkins so here's some things about a bear repo normally
+23:23 it's used for the official copy of the code for example github repos or bear normally it is remote in contrast to the
+23:30 local repo where you do your work in our case we have a repo within the ide
+23:35 project it cannot directly be used for development to locally modify files the
+23:42 way it normally works is you make your modifications in your local repo and
+23:48 then you push them into the bear repo so our automated builds
+23:53 done by jenkins obtain the code from this git server of the bear repo
+23:58 for simplicity for this course we use file urls to access this server
+24:05 rather than ssh or https urls you would normally use normally see with git and we're able to
+24:12 do this since everything is on one laptop we don't need a network and i did this just to try to make it a little bit
+24:18 simpler so to create our bear repo it's pretty simple we cd to the parent
+24:24 directory uh and i just i created a folder called repos where i'm gonna put all of my bear repos of which there's
+24:31 now one you make a directory for the bear repo the name of the repo and then
+24:37 by convention this directory or folder has a dot get suffix we cd into there
+24:44 and we run git init with the dash bear option and it's done so the url for this uh repo is here it
+24:53 starts with file colon it's basically the path and so now that we have the bear repo
+25:02 complete created we can go back and push the contents from our local repo
+25:09 so i'm back in my git project and i can now push the local repo to the remote repo for convenience so we don't have to
+25:16 enter the url of the remote repo all the time we can give it a name and then use that name so here is the command
+25:24 to define a repo and give it a name so we say get remote we want to add we're going to give it
+25:30 the name origin which is the conventional name and then here is the url
+25:36 so now our local repo knows about that now we can push the code normally i just
+25:42 do a git push and that's all that's needed but for the first time we have to
+25:47 tell it what the default remote repo is and the branch so
+25:53 i just say we're going to push to the origin and we're using the master branch
+26:01 and there it's working and now everything has been pushed
+26:06 to the remote repo before leaving git i want to show you a few things first let's look at the
+26:13 history of our local repo using git log so there you can see the three commits
+26:18 that we made so now let's say we want to find the difference between two of those commits
+26:24 but we want to start by just looking at the names of the files that changed so there are a lot of ways to do that
+26:31 i'm going to cut and paste in a diff command in this case we're identifying the
+26:39 commits by using these hashes which are unique strings but the command doesn't require you to
+26:46 give the whole hash you can just give enough that it's a unique value so we
+26:51 can do this is going to give us the difference between this commit the first commit and the second one
+26:57 and there is the list of the files and let's say now we want to see what happened to main.c
+27:04 so i'm going to edit this command line by getting rid of dash name only
+27:12 and adding core source main.c
+27:17 and there you have it it shows that we've added those lines at main uh that
+27:23 if you'll remember uh also it looks like i must have inserted uh some spaces and
+27:29 this existing line uh it uh it shows it as being removed and then re-added
+27:35 lined up with these two so um source code management it's a complex
+27:40 subject this is just a tip of the iceberg but i hope this gives you a feel of what's going on when you use source
+27:46 code management you might remember that i use an stm32 blue pillboard for my
+27:52 hardware-in-the-loop simulation hardware to monitor and control gpio so i created another ide project as well
+28:00 as another git repo for this board the hardware-in-the-loop simulation
+28:06 hardware uses the same application code as the main project and i'll discuss that application in a later lesson
+28:13 but there are some ide configuration differences first the ide does not know about blue
+28:19 pill boards it's not an st board so when you create the project you just have to
+28:24 create one for an mcu of this type now this means that there is also less
+28:31 hardware configuration already done for you you have to do more yourself so first you need to
+28:38 enable debug this is critical because if you don't do this you may have problems flashing the board in the future
+28:45 you also need to configure the uart for the console serial port
+28:51 now clock configuration can be modified to get a much faster clock 72 megahertz
+28:57 based on the 8 megahertz crystal the default configuration gives you a very slow clock
+29:03 so to do this you first have to enable the crystal and here's how you do that
+29:10 then you go to the clock configuration tab now it's difficult to sort of
+29:17 explain the exact changes so here's just a screenshot with the changes highlighted in red and
+29:25 you should then see for example these output frequencies here by the way is the 8 megahertz
+29:31 crystal that we enabled there's a lot of good information on the web about using these boards and here's
+29:38 a particular one i actually used this website to help me with the clock setup
+29:46 so i have just one prompt for this lesson so let's go through it are there any downsides to creating the ide
+29:52 project repo in several steps or commits as we did in this lesson besides creating this history can you think of
+29:59 any other advantages well the downside is the repo will be
+30:05 slightly larger because we did it in steps if we would have just waited until the
+30:11 end until we had everything set up and then just did one commit the repo would be smaller not by much
+30:18 now the advantage of this or additional advantages if you made a mistake halfway through we
+30:25 could have backed out the last commit and got rid of the mistake and redid it
+30:32 it would be cleaner you would have removed the bad stuff but on the other
+30:37 hand this happens all the time in software you're always making mistakes and so normally people don't back out
+30:43 commits because there's sometimes there's complications in doing
+30:48 that normally people just fix the mistake and just do another commit
+30:53 so here's a brief summary of the lesson we looked at the contents of an stm32 cube ide project to decide what parts
+31:00 would be stored in a git repo we created a git repo for our ide project and added
+31:06 to it in several steps we created a remote repo which is a bear repo for
+31:12 official storage of our code and to share it with jenkins and finally we pushed our local repo
+31:19 in the ide to our remote repo well this is the end of the lesson on
+31:26 setting up our git repo and git server thanks for watching

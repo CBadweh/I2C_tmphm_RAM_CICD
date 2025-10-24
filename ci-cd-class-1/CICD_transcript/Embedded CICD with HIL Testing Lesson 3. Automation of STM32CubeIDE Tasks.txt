@@ -1,0 +1,426 @@
+in this video lesson we look at the
+automation of the tasks that you would
+normally do inside the ide
+so we will look at what tasks can and
+must be automated for cicd
+automating the builds automating the
+programming of flash memory
+a demo of the automation
+some prompts and finally a very short
+summary
+so let's get started
+we do a lot of tasks in the ide and the
+question is which of these can and must
+be part of ci cd automation
+well i list the task here and i group
+them in different colors these first few
+tasks in red
+are to me clearly manual tasks they are
+really design work like creating the
+project configuring hardware and so on
+these have really nothing to do with ci
+cd automation
+now i'm going to go down to these green
+tasks
+these have to be part of ci cd
+automation because you're constantly
+modifying code that needs to be built
+and programmed into flash
+so that leaves these two tasks in blue
+the first blue task is regeneration of
+ide supplied code this is done after
+making changes in hardware configuration
+or ide managed software configuration
+now normally you don't do this that
+often and since you use the ide
+to make these changes it isn't hard to
+just have the ide generate the code
+right then
+now the second task in blue is creating
+and updating make files
+now this can happen more often for
+example if you add a dot c file or
+change compiler settings the make files
+usually have to be updated
+i would really like these make file
+updates to be handled by ci cd
+automation but here's a spoiler alert
+the ci cd system in this course doesn't
+handle these blue tasks
+so what does this mean to you as a
+developer
+well for the regeneration of ide
+supplied code i don't think it's a big
+deal when you make changes like hardware
+configuration you generate the
+regenerate the code in fact i think the
+ide
+usually reminds you to do this
+now make files is a little trickier
+and i imagine a development workflow
+to accommodate this sort of like this so
+you make code changes in the ide project
+and you build them first you fix any
+compiler problems
+then you test and debug your code using
+the ide normally you have to make more
+changes and you go through this uh loop
+here back and forth as you uh refine
+your code
+so when you reach a point where you're
+happy with your code and you want to
+push it to get for cicd cicd
+you first do final
+ide builds for both debug and release to
+ensure the make files are up to date it
+is quite possible there are no make file
+changes but unless you know that for
+certain it's just good to do this step
+so then you do the get commands to
+commit file changes both code and make
+files and you push the commit
+i view this as a workable system even if
+it isn't ideal
+so first we need to automate the build
+and in particular we need to build flash
+images for both debug and release
+configurations now with stm32 cube ide
+there are at least two options to build
+from a script
+first we can build using
+stm32q ide
+in what is called a headless way
+using command line parameters by
+headless it means the gui i don't think
+even appears on the screen the ig ide
+just does the work
+and there's an example of this in this
+uh file that gets installed with the ide
+and you can look at this and see how to
+run the ide head list to do things like
+builds
+now the other option is to simply use
+make
+this is possible because the ide itself
+uses make to do builds
+the key is
+that the ide
+generates and maintains the make files
+and this option depends on the ide doing
+this for you
+now i chose option two
+the major advantage is that it uses the
+standard make tool there is no
+dependence on the ide or fighting with
+the ide
+frankly i did play around a little with
+headless builds and i started having
+issues and i had real doubts that i
+could use this method
+and in general i would like to move away
+from the ide in this project
+so the major disadvantage of option two
+is that of course you do depend on the
+ide to update make files when needed and
+we just discussed that on the last slide
+so now let's create the build script it
+turns out that the ide
+provides the basic information to easily
+create a build script
+so we go to the project properties
+and get some environment variables and
+here is the path of where you uh where
+you find those
+but we can i we can go down to this
+screenshot i made and this shows you
+where you find them and the variables
+we're interested in are first cwd which
+is current working directory and this is
+where you have to be when you perform
+the build
+and then the other thing is a updated
+value for the path so what the id has
+done is taken the
+standard path variable from your system
+and added a few things for the tool
+chain
+the other thing we can see in this
+screenshot is the
+this console here and i had done a build
+just before i took this screenshot so
+here's the command to do the build and
+it's one line make
+dash j4 all
+and the j4 is
+telling make you can run
+up to four
+steps in parallel for compiles for
+example and that's because i have a dual
+core
+laptop with hyper threading
+so going back
+[Music]
+we can take that information and we can
+build a trivial build script for doing a
+debug build now this isn't a great
+script everything is hard-coded but it
+gives you the idea so set local is just
+a windows thing you can see
+why that's useful to put in there
+and then
+we take those
+environment variables
+the values from the ide and we set
+cwd to one of them
+and then i set the path to the path that
+was in there and i just said i snipped a
+very long line the the path is like five
+lines long or something i didn't want to
+put it in here
+and then the actual script all it does
+is it cds to this directory and then it
+executes make dash j for all and that's
+all there is to it it's pretty simple i
+was sort of surprised at how easy it was
+to create this script
+now for jenkins when it does builds the
+script is a little bit more complicated
+because first we don't want to be hard
+coding
+these these things in here
+and the other thing is that the
+in jenkins the build script does one
+more important thing that i need to show
+you
+so here we are in the official build
+script that's used by jenkins
+and here is the usage for it and i won't
+go into this in detail but you can see
+uh
+you pass a lot of the information into
+the script and it's not hard coded
+and that's what's being done here
+and uh
+then the one thing it does that is uh in
+addition
+is
+we have a scheme
+where
+the
+build id
+is part of the image
+and so from there's a console command
+that allows you to print the version of
+the software
+and that's important uh we'll talk about
+that later it's important to make sure
+we're
+testing for instance the right version
+of the software
+and so there is a file called version.h
+and these echoes are basically building
+that file with the version in which with
+the version in fact this this pound
+define here
+is um
+is the actual version id
+and so once we get that done then we
+just
+do a make and uh either make all or a
+make clean and that's what the target is
+now for programming flash it's a little
+simpler than building
+the software application stm32 cube
+programmer which is a gui and which you
+need to download and install also
+includes a cli tool called stm32 program
+or cli and this does everything we need
+so to program the flash using the cli
+tool you have to tell it the image file
+obviously the address of flash where to
+start programming we want to start at
+the beginning of flash and you can get
+that address from the data sheet you
+could look at the linker script but i
+can tell you for all of the stm32
+cortex mcu's i've used this is the
+address of the start of flash
+and then you need to optionally tell it
+the st link serial number which is the
+interface
+if you only have one st link
+connected to your laptop or whatever you
+don't have to give it this
+but i have multiple so i do need to give
+it the serial number and there are
+different ways of getting these serial
+numbers but one way is to run the cli
+with just the dash l option and it gives
+you a list of various things including
+the st-link serial numbers so
+a trivial flash programming script for
+the debug image where a lot of things
+are hard coded is this
+i
+set a variable called cli which is the
+executable
+the st link for my uh
+board for the connection is here
+and then this is the image i want to
+program
+so here's the command uh the cli i tell
+it to connect to a swd port here's the
+serial number i tell it to download this
+image and program it starting at this
+address and then when you're done
+programming do a hardware reset and
+that's all there is to it
+now for the jenkins server
+like before the script is a little bit
+more complicated because we don't want
+to hard code a lot of this stuff
+but it isn't really that much
+different so i won't go through it but
+if you want to look at it here is the
+path in the project
+i came across an issue with the makefile
+and wanted to go through that with you
+and describe a solution by the way i
+found this just by scanning through the
+some of the make files just to make sure
+there weren't problems like this
+and so the issue there is a there is a
+full path name in the make files and
+this is the path of the linker script
+file and so this is the line in the make
+file and this part in red is the problem
+and
+this
+path is a reference to a file in the ide
+project folder now that's okay when
+you're doing builds from the ide
+but for jenkins builds only files pulled
+down from git into the jenkins workspace
+can be used you can't have
+the build when you're doing a build from
+jenkins going off into some
+ide project folder to get a file
+so there is a fairly simple solution to
+this and that's in the project
+properties you can actually set
+that path name
+and this here line shows you how to get
+to that setting by going through the
+properties and when you find it
+this path name here
+is
+what should be used and if you look at
+the directory where the builds are done
+the current working directory this path
+name will work
+and so i have
+a some screenshot showing the settings
+or the properties window where you
+change it and so it's this
+long field here which contains a bunch
+of variables
+and we're replacing it with
+this path so it's fairly simple
+there is a prompt at the end of this
+lesson where we discuss an alternative
+solution to this
+i want to do a short demo of the build
+automation so here we are
+in the top level folder of the ide
+project
+and i'm going to go into the folder with
+the
+tools so here you see the build and the
+flash script that we talked about but
+there's also a build eye and a flash eye
+i created these scripts for when you are
+working in the ide project and want to
+do builds from the command line rather
+than use the ide gui
+so the build eye script
+takes
+the configuration either debug or
+release and the build target which is
+either clean or all
+so for the debug release i want to do a
+clean
+so there it goes and what it is doing is
+removing all the object files image
+files and all that kind of stuff it
+didn't take too long
+so now i want to build the debug
+configuration and i want to build all
+so let me start that now this is going
+to build everything it's going to take a
+little bit so i'm going to pause the
+recording while it builds
+okay so the build finished so now i want
+to program the flash with the debug
+build
+so i do
+flash i debug
+and there it goes
+and that doesn't take very long
+so now the board is ready for testing
+so here are the prompts for this lesson
+i'll pause here just for a second and
+then go through them one by one
+what is another way of fixing the issue
+we just looked at where the generated
+make file had a full path name in it for
+the linker script
+well what you could do is have a
+pre-build script that gets executed by
+jenkins and that script would edit the
+copy of the make file in the jenkins
+workspace to change the full path name
+to a relative path name
+you made some code changes and the
+jenkins cicd build fails but just for
+the release build what might be the
+problem
+well if the changes you made affected
+the make files maybe you only did an ide
+build for debug and not for release so
+the make files were only updated for the
+debug folder
+as part of your development work it is
+best to do both debug and release builds
+from the ide before committing and
+pushing new code to git
+besides adding or removing application
+source files what other kinds of changes
+would would require you to do ide builds
+to update the make files
+well there are probably a lot of things
+but some that come to my mind is one is
+changing compiler options such as the
+dash d option that's used
+to define preprocessor symbols
+on the compiler command line
+another uh
+change would be switching between the
+hal and the ll libraries that's going to
+cause a lot of changes and are going to
+require a lot of updates to the make
+files
+so here is a short summary of what we
+did in this lesson we identified the ide
+tasks that must be automated for cicd
+and we identified them as building
+images and programming the flash with
+these images
+then we came up with schemes on how to
+automate these tasks in scripts and
+these are the scripts that jenkins will
+be using so in upcoming lessons we'll
+continue preparation work for our
+jenkins pipeline
+well that's it for the lesson on
+automation of the ide task thanks for
+watching

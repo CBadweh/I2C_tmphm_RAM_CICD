@@ -1,0 +1,5 @@
+../modules/can/can.c:94:9:can_get_def_cfg	1
+../modules/can/can.c:111:9:can_init	1
+../modules/can/can.c:128:9:can_start	1
+../modules/can/can.c:144:9:can_run	1
+../modules/can/can.c:153:9:can_hdw_init	3

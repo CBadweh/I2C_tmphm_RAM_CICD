@@ -1,0 +1,526 @@
+in this lesson I cover some background
+on reliability availability and
+maintainability so this is mainly a
+theory of operation lesson then in the
+following lessons we put this to
+practice so let me quickly go through an
+outline of this lesson I start with some
+what I call facts of software life
+depending on where you are in your
+career this might be these might be
+interesting takes or it might just be
+obvious stuff now there's a lot of
+terminology in this course starting with
+a title and we go we go over those
+terms then I give an introduction to
+fault handling as that is an important
+topic in this course then I discuss
+maintainability support for non-fault
+scenarios and finally uh there are some
+prompts or questions for you to consider
+and for each one I give you my take on
+it here I want to discuss some facts of
+software life when I entered in eded
+development I really knew nothing of
+this stuff so the first thing is in
+systems with complexity there will
+almost always be
+bugs new features can often produce new
+bugs that's sort of not
+surprising uh but bug fixes will
+sometimes lead to new bugs uh that's a
+little bit more surprising but it's the
+whack-a-mole problem you fix a bug and
+it has some side effect that creates
+another
+problem now this is why uh sometimes in
+uh development processes when you get
+close to a major release uh you don't
+fix minor bugs because you don't want to
+ship a major release and then find out
+that a uh minor bug you fixed at the
+last minute actually had some subtle
+side effect that was uh actually
+worse products will often ship with uh
+some known non-serious bugs and the bugs
+to worry about are those that are
+unknown if you know about the bug it's
+usually not a big
+problem another uh uh principle is that
+weaknesses in defensive programming are
+bugs and sometimes uh it takes a little
+bit to accept that uh now external
+devices or systems will sometimes not
+behave as expected that's
+reality and there's an interesting
+statement in an RFC from the ETF that
+says in general and this is for
+networking uh products in general it is
+best to assume that the network is
+filled with malevolent entities that
+will send in packets designed to have
+the worst possible effect now with
+security attacks that's of course
+completely true but even systems that
+are trying to play nice may send you
+packets uh that they think are okay but
+that cause you Havoc so so if your code
+can't handle in some reasonable way
+unexpected or even wrong I put wrong in
+quotes behavior in an external device or
+system you have a
+bug now the same thing goes for users
+they will not behave as expected and uh
+you know sometimes uh there'll be a
+problem reported and you think the user
+did something that just is makes no
+sense at all but you know it's your job
+to deal with with uh people doing things
+that seem to make no sense so um so
+that's defensive programming and then a
+final thing uh is that analysis of
+potential failures is critical for more
+for many embedded systems and it should
+always be part of your development even
+if the system is not considered uh
+safety critical and you you have to
+think about what what kinds of things
+can go wrong and know your answers to
+this question uh some of it's based on
+your experience some of it is just based
+on looking at the system and thinking it
+through and then the follow-up question
+is how can I detect and react to these
+kind of
+failures now I have several slides on
+terminology this might not be the most
+exciting stuff but if you're a
+professional engineer it is important to
+understand terminology so you can
+communicate precisely with others and
+read articles and so forth so I'm going
+to start with
+reliability this is the ability of the
+system to a function without failure now
+in our case a failure might be a system
+crashing or just doing something wrong
+it's measured in principle in uh
+failures per unit of time so there is
+this uh term meantime between failures
+mtbf which is a measurement in years for
+example so in other words you expect a
+failure every five
+years this works
+for uh hardware and other kinds of
+things that wear out
+it's hard to apply mtbf to software it
+just is a different thing um now
+reducing failure rates but for example
+by increasing code quality is uh
+critical to um increasing your
+reliability but a reliability plan based
+on bug-free code is usually just
+unrealistic now there are General
+techniques to um reduce failures uh
+besides just writing better code and
+I've done some of this a good example
+here is protection against double freeze
+in systems uh with Heap so in this case
+there might be a bug in the code that
+does a double free but you have some uh
+preventive code in there that will
+prevent it from actually doing any harm
+so in this course we just assume there
+are going to be failures and we focus on
+how to deal with them so the next step
+is or the next term is availability and
+this is the the um ability of a system
+to function at any point in time it's
+measured as the percentage of the time
+that the system is functioning or the
+percentage of time that it's up now this
+is affected by mtbf if you don't have
+any failures uh you're 100% available um
+and it's also affected by the meantime
+to repair in other words once there is a
+failure how long does it take until the
+system uh starts running again and of
+course that can depend on many many
+things depending on the
+technology in this course we focus on
+the detection of failures and automatic
+uh repair to reduce um meantime to
+repair and this is things like an
+automatic uh system reset so continuing
+on the next term is
+maintainability which is the ease uh
+with which a problem can be corrected
+there are different points of view on
+this and I'll address two of them
+separately because I want to make it
+very clear from the customer's point of
+view maintainability relates to the
+features and tools that are provided to
+easily diagnose and fix problems such as
+uh configuration and installation errors
+Hardware problems or problems with an
+attached system we generally don't
+expect customers to find software bugs
+they might but the things listed above
+are generally the problems they deal
+with now there should be explicit
+product requirements for these features
+and tools as they are really a part of
+the product from the customer's view
+just like the product's normal
+operation we aren't so interested in
+this course in the customers point of
+view we're more interested from the
+software developers point of view and in
+that case maintainability relates to
+what features and tools are provided to
+uh diagnose and fix software bugs and
+there are scenarios like this a system
+has some problem while accessing while
+running and you fortunately have some
+kind of access to it say it's in a lab
+and you want to get information from it
+while it runs you need a way to get that
+information another one is the system
+has experienced a failure it has
+restarted itself and it's now again
+running fine um this is generally the
+more difficult uh scenario and uh you
+really desperately need some
+information so us usually it is up to
+the development team to address these
+features and tools there's usually no
+written requirements because normally no
+one outside the development team really
+is that concerned with how um easy it is
+to maintain the
+software so one of the things I
+mentioned here is that uh sometimes when
+we talk about software
+maintainability uh you tend to think
+about things like code quality and the
+development environment you know how is
+how easy it is to read the code and to
+test the code and so forth those are
+very important things but those are
+outside the scope of this
+course this is the last slide on
+terminology and here I cover a few more
+terms Beyond uh reliability availability
+and
+maintainability the first is safety and
+this can be defined as the ability of a
+system to not harm uh people the
+environment or other Assets Now that's
+not the focus of this course because
+many it with many systems safety is not
+um a big issue uh also it quickly
+becomes application uh dependent also
+I've worked on systems where safety was
+a issue but it wasn't a primary issue
+and so I feel I just don't have uh
+sufficient experience in
+this two other terms you'll hear are
+resiliency and
+robustness now generally these relate to
+the ability of a system to function in
+the face of adversity now this leads to
+the question of what is the adversity
+and that's what makes these terms a
+little bit vague to me the adversity
+could be the unexpected behavior of an
+external device or system or the
+diversity could be some software getting
+stuck in a
+loop perhaps you could say that
+resiliency and robustness are two things
+needed to achieve reliability and
+availability and then then the final
+term I want to discuss is non-functional
+requirements and I bring this up because
+I actually worked many years uh for
+different companies and never heard this
+term we didn't use it and when I first
+heard it it sounded a little bit odd to
+me but a non-functional requirement is
+uh what the system not what the system
+must do but how it must do it so it
+tends to include things like reliability
+availability and
+maintainability as as well as many other
+topics such as security and
+safety now these uh non-functional
+requirements like all requirements tend
+to be from the customer's point of view
+but there can also be nonfunctional
+requirements uh for a software design
+from the developer's point of view and
+this would be things like those features
+and tools we discussed that are needed
+to help diagnose and fix bugs
+now I want to provide some background on
+fault handling as it is a key Topic in
+this course this is just an outline of
+the actions that are part of fault
+handling and I discuss how they address
+some of the system properties we've seen
+so first obviously you must detect a
+fault maybe using techniques um covered
+in this course this addresses
+availability because to ensure High
+availability you have to know when
+something is wrong when I worked in
+Communications the worst field events we
+had were when the system was messed up
+in some way and it wasn't working right
+but it didn't know it so the techniques
+include things like Watchdog CPU
+exceptions and maybe various things the
+application is checking
+on next once you've discovered a fault
+you need to collect information this
+addresses maintainability because this
+information will help developers
+diagnose and fix the
+problem and this information can include
+return address CPU registers fault
+registers uh circular buffer logs and so
+forth and then finally you perform
+recovery actions based on some policy
+the policy will depend on the nature of
+the system and also what is
+practical so one policy is a failsafe
+policy which addresses safety so in this
+case if a fall it occurs the system will
+shut down in a safe manner such as our
+all outputs off and we stay idle the
+hardware design might play a big part of
+this fail safe policy by the way so some
+Hardware or software reset might be done
+but the key is the system will not
+restart operation some higher level
+action such as a person uh is typically
+required to restart operation for
+example I worked in robotics for some
+time the robots worked in factories and
+if a robot controller experienced a
+fault and stopped in the middle of a
+task uh it would just stay there and uh
+people would have to get involved to
+sort of get things back and going again
+and sometimes it was not simple to get
+that uh going again so fail safe is
+commonly used in in systems where safety
+is of most importance makes sense so
+another policy is automatic recovery and
+restart and this addresses availability
+in this case if a fault occurs then um
+typically a hardware uh or software
+reset is done for part or all of the
+system and it attempts to automatically
+restart operation so this is commonly
+used where availability is of most
+importance um and that includes things
+like communication systems Entertainment
+Systems uh some consumer electronics I
+worked many years in Communications and
+uh this is the
+norm here I'd like to discuss some fault
+handling design principles fault
+handling code should be of the highest
+quality however you achieve that bug
+fault handling code can be especially
+costly because it can leave a sick
+system in some zombie State and that's
+the last thing you want you should keep
+your fault handling code simple and
+simple for others to read and understand
+it's not a good place to be clever uh
+there are many advantages to a single
+recovery action that being a full
+Hardware reset I like to do that if it's
+acceptable and that's what we do in this
+course if you do something less than
+that like let's say you are having
+problems talking to a sensor so you
+reinitialize an iqu C controller then
+normally if that doesn't work you later
+have to escalate to a full reset and
+that is a much more complex design of
+course sometimes you really really need
+to avoid a full reset if at all possible
+so it's worth it to start small and
+escalate only if you need to so now
+panic mode
+operation often when a fault is detected
+the overall Integrity of the system is
+in question for example any data in
+memory might be corrupted so Hardware
+drivers might not work in panic mode we
+try to get the system into a basic sane
+State and then operate simply trying to
+depend on as few resources as possible
+so for example we immediately uh uh
+disable interrupts for all future
+operations we do them in polling mode
+for example example we have special
+Panic versions of console and Flash
+output functions that pull and of course
+they block which we normally don't do if
+there's an R toss uh disabling interrupt
+should stop scheduling but you need to
+make sure that's true um we need to make
+sure the stack pointer is valid maybe
+there something has went wrong with the
+stack and normally we just set the stack
+pointer to its initial value like we
+would on power up and just more or less
+start over with the stack
+uh possibly we should reinitialize any
+peripherals that will be used for
+example the UR now I didn't do that in
+this course because of the way the
+hardware initialization code is
+organized right now but it's a good idea
+and then finally if available have a
+hardware uh have a hardware Watchdog
+timer running as a backup so if
+something goes wrong and your fault
+handling gets stuck or whatever uh the
+Watchdog will hopefully reset the
+system so far we've been discussing
+mainly fault scenarios so I want to
+discuss maintainability support for
+non-fa scenarios for just a bit these
+are techniques I used in my work and
+that I'm now using in my YouTube courses
+first it's key to have a console and
+console commands that's your window into
+the system and with today's MCU uh
+consoles have very low cost now the
+console commands are typically used to
+get the internal uh status of the
+modules or to control logging
+speaking of logging multi-level logging
+on a per module basis is uh important it
+allows you to walk up to a system and
+turn on logging on some module uh at
+some level and find out what's going on
+often the console is the login output
+device particularly for small systems
+and if you can arrange to have logging
+to a USB drive that's really convenient
+for lab and field field systems because
+someone can put the USB drive in and and
+take it out and bring it back uh to your
+lab and and check it out um and of
+course USB drives can hold a lot of
+data so the last thing I wanted to
+mention is performance measurements or
+PMs and PMs are commonly counters of
+unusual events uh like bus or
+communication errors they can also be
+flags that are true when some unusual
+condition is present like an
+alarm um PMS are often displayed and
+reset using uh console commands so PMS
+are convenient to check on a system
+that's been running for a long time and
+just see if if it experienced anything
+um any issues uh they can also be used
+when debugging a communication interface
+uh for example a Serial interface you
+can look at the PMS for that serial
+interface and seeing if it's getting um
+you know framing errors or
+whatever here are the prompts or
+questions for this lesson I will just
+pause here for a moment and then go
+through them one by one giving my
+take the reliability of a product is
+sometimes the best when it enters a
+maintenance support only phase why might
+this
+be well when in maintenance uh support
+only phase uh software updates are only
+in many cases only for bug fixes so with
+no new features fewer bugs are being
+introduced produced so overall you're
+reducing
+bugs and I've seen this in products um
+where new feature development has
+stopped but uh maintenance uh releases
+still go out and yes they get very
+reliable because uh the the number of
+bugs that are causing problems just
+continue to
+decrease if a system is to be
+99.999% available and people refer to
+this is 59 how much time per year can it
+be
+down well the calculation is pretty
+simple uh 365 days 24 hours 60 minutes
+and this is the percent of downtime and
+that's uh 5 and a quar minutes per year
+so 599's availability is often expected
+for communication Network
+equipment and it is often achieved uh
+using redundant Hardware that can be
+switched in or replaced while the system
+is
+running say a system is running but can
+only perform 50% of its normal capacity
+how should this be treated from an
+availability
+Viewpoint well this only applies to
+systems where there is a concept of
+being partially working some systems
+they're either uh working or they're not
+but let's say a communication system
+might be one where it can be 50% at it
+of its capacity so sometimes uh the
+availability is pro-rated such that if
+the system runs n minutes at 50%
+capacity it only counts as n over two
+minutes of downtime these things are
+important when you have agreements um on
+what the downtime is of a system now for
+large distributed systems it might be
+possible to take down parts of the
+system in stages and do Hardware or
+software updates piece by piece this
+depending on how exactly how
+availability is measured this could
+reduce or actually eliminate uh downtime
+due to a software
+update with the communication device if
+all communication links are down should
+you consider treating it as a
+fault Well normally no you would assume
+the problem is external why would you
+view that as a fault but there is a
+chance that the problem is actually in
+your system if your system is not doing
+anything useful anyhow you might
+consider treating the condition as a
+fault say after 15 minutes and go
+through a
+reset I worked on a system once I joined
+the project after the uh product was
+established and I noticed the first time
+I was doing some work in the lab is that
+some of the communication processors
+were resetting and it was something like
+every 15 minutes and of course I thought
+what's going on what's wrong so it turns
+out they were using this
+strategy well this is the end of the
+lesson on background on reliability
+availability and maintainability I hope
+it was useful to you and thanks for
+watching

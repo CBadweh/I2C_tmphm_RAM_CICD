@@ -1,0 +1,290 @@
+we've done a lot of preparation work for cicd in this lesson we pull it all together by creating the jenkins
+pipeline so here's a brief outline first i give a little introduction to jenkins
+then while i don't go through the installation of jenkins in detail i do give you a few installation hints based
+on things i've noticed then we look at the jenkins pipeline that's of course the core of this lesson
+then we install jenkins web hooks in the git server and that's a key part of the automation
+and then finally i do some demos since i assume you won't know much about
+jenkins i'll give a brief introduction and of course you can find a lot on the web about jenkins
+and i should point out that even though jenkins is still widely used there are many alternatives now
+jenkins is still a safe choice if you're creating a new system but it's something
+you might want to look around and see what else is available so first of all
+i like to look at things in simple ways and to me i've used jenkins as simply a
+sophisticated script runner and data store specialized for devops there's
+nothing magical about what it does but it does it well now jenkins is heavily uh based on
+plugins in my view that's good and bad the good part is that third parties can easily add new features and and that's what
+they've done to make jenkins so powerful the bad part is that i think sometimes you have to do more poking around to
+figure out how to use plug-ins the documentation is sometimes not consistent but of course for popular
+plugins you can find a lot of discussion on the web now jenkins has different styles of
+projects sometimes referred to as jobs in my past work i have used what is
+known as freestyle and it worked fine there is some supportive pipeline
+concepts in freestyle projects but you have to do a lot of it yourself
+so as you would expect a pipeline project supports pipeline concepts much
+more completely and it's the more modern approach and it's what we use in this course
+now when it comes to pipelines there are two options of how
+you write them and the terminology is a little confusing to me first there are
+scripted pipelines they use a scripting language that is powerful but more complex and
+this was the original when pipelines first came out and then later something was created
+called declarative pipelines and that's what we use in this course um they're still a type of script but it they're
+simpler and and they're more popular and declarative pipelines can contain
+pieces of the more advanced script language if needed so you sort of get
+the best of both worlds now the pipeline script or text
+is stored in a file called jenkinsfile and that file can either be stored on
+the jenkins server in the jenkins application or it can be stored with a product source code for example the git repo and
+that's what we do in this course storing jenkins and other low-level ci
+cd scripts with the source code can simplify development because now your ci
+cd tools are under the same source control as your software you can make coordinated changes rather easily and
+the history is maintained together so one final note a common style is to make
+the jenkins file lean meaning it doesn't contain much logic all it does is call
+lower level scripts to do the work and this keeps you more independent of jenkins more of the
+logic is in your own scripts and means you'll probably have to learn less about
+the jenkins script language because you're using it in a simple way
+i'm not going to go through the jenkins installation in detail but just give a few hints based on my experience so be
+sure to read carefully the jenkins installation instructions i do want to point out that i am using windows 10
+things might be different on mac os or linux so my first installation attempt had
+issues installing plugins and i was getting errors relating to certificates
+and security i couldn't clearly isolate the problem but i was suspicious about
+the java jdk i installed because i didn't fully understand open java jdk
+and all the different downloads you can find on the web and i i should mention that jenkins requires
+java jdk and that's described in the installation instructions so i started over
+and i used uh the jdk that is listed
+here you can just read this and because that was known to work based on someone on uh on the web and and i
+had success with that uh when i was installing the jdk i did not add it to the path i didn't think
+that was necessary but you do need to have it set up this environment
+variable called java home i think that's how jenkins finds the java jdk
+now one of the more tricky parts of the installation is you need a windows user
+that will start up the jenkins service jenkins runs in the background on your machine
+so you could create a new user i ended up using my own user id and by user id i
+mean my my windows user id that i log in with but i still had to modify windows
+security to allow my user to run the jenkins service
+so to do that you run the local security policy app again this is a windows thing
+and then you go through this this sequence to get to the point where you add um that privilege
+and if we i'll just skip ahead here we have i have a screenshot of the local
+security policy app and uh you can see where i went through this and actually
+the key line is the one right above the highlighted line where it says gene i had to
+add myself to this list and that allowed me or allowed my user id to start the jenkins service
+now as i mentioned jenkins runs as a service and its interface is uh http
+and this is the ur url by default the port number is 8080 and as you may know
+localhost is means you know when you're on a browser you say localhost you mean uh on your
+laptop that you're using the browser on so uh the other key thing is as i
+mentioned uh jenkins is based on a lot using a lot of plugins and these are the
+ones i installed some of these might be installed by default for you but you should check
+them before we get to the pipeline i want to show you the email setup because that
+gets configured at the global level and not as part of the pipeline we are setting up emails so we can send a
+message to someone that being me if a build fails now i should mention the pipeline itself
+makes the actual decision to send an email but at the global level we define
+the server parameters and all that sort of thing so here i am at the dashboard and from
+the dashboard i go to manage jenkins and then configure system now my laptop is a
+little sluggish so i'm going to pause the recording while i do that
+okay so i'm in the system configuration and now we have to find the configuration data for extended email
+notification and there it is right here it starts and um
+this will only show up after you install the extended email
+plugin so the first thing we have is some information about the smp
+smtp server for gmail and there it is we also have to provide authentication
+information so if we go into this advanced section you'll notice the credentials here now
+i'm using a username and a password and this is not a very secure system these
+days and in fact to use a password in this way
+you have to go into the google account for the gmail and you go to manage your google account and then you go to
+security and you turn on an option that says less secure app access
+i got a notification i think they're gonna disallow this at some point in the uh future because it's just not good
+from a security standpoint and what we really should be doing is um creating certificates but i was too lazy to do
+that so uh if we continue on uh here are the default recipients and the
+default recipient is me this is that email account i created for this class
+and then you also provide some information about the email subject line
+and the email body and what you'll notice here things like dollar project name these are
+jenkins supplied global variables these are documented and you can use these
+to provide useful information in the email
+so now we're ready to start looking at the pipeline and here i am at my jenkins dashboard and you can see that there's
+just one jenkins job it's called cicd class and it's a pipeline
+and if you want to create new jobs for instance new pipelines you would use this new items icon here
+so let's open up this pipeline
+now there's a lot of stuff on this page and i'm not going to go through it it's something you can explore on your own
+down here we see the build history and each row in this table represents a
+build the columns represent stages in the build so for example the build starts with
+checking out the code from source code management doing a build doing static code analysis
+programming flash for the debug image then testing the debug image using hardware in the loop testing it does the
+same for the release image and then there are what are known as post build actions so the oldest build was
+successful it's all green the newest build failed due to the hardware in the loop
+test for the debug build and it failed because i removed one of the gpio jumpers now when you create a pipeline
+you have to decide that when a stage fails should you keep going or not
+in the case of the test failing we stop so you'll see it didn't even try to test
+the release build now you'll notice the this is green but that's uh the post build actions
+and um they execute even if the the build fails
+and in particular because it did fail the the post action in this case was to send an email
+so in the demo we'll look at these build results a little bit more so now let's look at the pipeline there
+are really two parts of a pipeline there's a bunch of configuration stuff we'll look at next and then there is the
+jenkinsfile script which is the real work of the build so let's first
+go to the configuration for this uh pipeline okay i have it open by the way i pause
+recording in some cases when i'm opening something up it's not really that slow but i just don't like to have these
+awkward quiet times in my video so this project or job is
+what's known as parameterized which means there are input parameters and in this case the input parameters are the
+com ports that should be used to connect to the boards this is all for hardware-in-the-loop testing and the
+st-link serial number that should be used when programming the flash on the board and so for each
+parameter we have a name we have a default value which matches what i'm actually using so i don't have to worry
+about setting these and then a description so we'll go past that
+next we have the build triggers now you can always build a
+a project manually on that previous page there was a build button but in this section we enable what's
+known as a a web hook trigger so
+later we're going to add a hook in our git hub server repo so it notifies
+jenkins when new software has been pushed and jenkins has to be prepared to
+receive that trigger and do the build and a key parameter remember this this
+token that will be put in that trigger coming out of git and that allows jenkins to
+figure out which job uh we our project we want to build
+so uh next we get into the actual pipeline now there are two options with the
+pipeline script option one is we could have put it right into this form
+but i chose option two and i'm specifying that right here that we're telling jenkins that the pipeline
+script is actually contained in source code management and then we tell it our source code
+management is git and given its get we then have to tell tell it what the url is of the
+repo and then if it were this is a file repost so it's right on
+the on the laptop if necessary we would have put in credentials here but since it's a file
+repo it can just go out and get it so there's some other options you can set
+but the final option is since we are getting the jenkins script from uh get
+we have to give it the path of where that file is within the repo
+so now we're ready to go look at the actual jenkins pipeline
+script so here i am in the jenkins file which is in the ide workspace and of course it's part of
+the git repo this is a declarative pipeline and not a scripted pipeline meaning the syntax is a little simpler
+and this style of pipeline is most popular you can tell that it's declarative because the first keyword is
+pipeline if it were scripted the first keyword would be node
+so uh frankly this scripting language is okay i've learned a lot about it
+one thing that is uh makes it difficult is because there are two kinds of
+scripting language for pipelines it makes a little bit confusing when you're looking for stuff on the web but the
+good news is there is a lot of stuff out there on the web so let's go through it it's not really that long
+there are different sections so the environment section allows you to declare variables i declare one called
+tool der which has all of the build tools in it and i declare that in
+terms of workspace and that's a jenkins defined variable that is the top
+directory of the workspace so before the pipeline runs
+jenkins will have already fetched the repo and the code and if you'll remember we gave it
+information about that in the pipeline configuration page
+so the code is there so now we're just ready to do the uh stages the first
+stage is called build a stage consists of executing steps there are different kinds of steps a bat
+step is a windows batch file and so this batch file build.bat we
+looked at this this is the builds the code and we pass it some arguments including
+the folder of where it should do the build and so this is doing the debug build and right after we do the debug
+build we do the release build so now we have those done if any of these
+bat scripts fail because there's a build error for example the stage fails and by default the
+entire build fails so now we go to the static code analysis
+and that runs a little batch script called static analysis.bat i don't think
+we looked at this but it basically just invokes the tool it's very uh simple
+and this in this case if that static analysis fails i didn't want the entire
+build to stop so that's why i put a catch error in here and so what this
+command does is it says if if this bat script fails mark the stage as having failed so that
+means static code analysis has failed but the bill overall build just market
+is unstable meaning the it has a problem but you know we're gonna keep
+going so the next thing we do is we program the flash the debug image we use
+that flash.bat script then we want to test that debug image
+and so we run the hardware in the loop python script and we pass it information
+like the console to use and so forth we then run this junit step this came
+with the junit xml plugin and what it does is it looks in this
+file which is where the test script has put the test results and
+it sucks that information and and makes it available for display we'll look at it later
+now neither of these steps will fail if tests have actually failed
+and so i added another step it's another windows batch
+file called check test results and i pass it the xml file and all it does is
+it looks in that xml file and if there are any failures the bat batch script
+fails and i do that so that if we have any test failures we stop right here we don't continue
+so but if that test does succeed all the tests passed
+then we repeat the same same operations with the release image we program it and we test
+it so now that's all of the stages so now there is this post build
+portion of the script and we have two cases a success
+if there is a success there is another script you might want to look at called deliver.bat all it does is it packages
+up the image files and a few other things and it puts them in a defined location it's
+the delivery area and i just picked a area on my uh c drive of where to put
+successful builds if the build was unsuccessful
+then an e an email is sent out and this is using that email plugin and i think
+these fields are pretty self-explanatory i think they override the fields
+that you if you remember we configured the email plugin and i think we gave it the
+default values for these this overrides those but it's the same thing and it's using
+jenkins variables to put useful information in the email message
+and that's the end of the pipeline well we're almost done there's one more
+thing we have to do we want the pipeline to start automatically whenever someone modifies code in the official git repo
+and fortunately that isn't too hard so git allows you to install hooks which
+are scripts that execute when a particular git action occurs there are client side and server side
+hooks we're interested in a server side hook in other words whenever a developer has done all of their
+private testing and maybe done a pull request when they push their code to the official repo we
+want a the pipeline to run so hook scripts are written using bash
+commands even on windows i don't know exactly how this works but that's how it is and for the server repo
+it's a bear repo the scripts are located in the hooks folder by the way for a client repo the hook
+the scripts are located in the dot hooks or dot get slash hooks folder but we're not going to use that
+now hook scripts have what i call magic names which means to install a hook
+script you just create a script with the correct name and git will just start calling it when
+that particular action occurs and we'll see how this works in just a second so
+i used a server side post update hook script which runs after new software is
+pushed into the repo and this post update that is the name of the file that's the magic file name for
+that type of hook so we've been talking about get going back to jenkins
+the generic web hook trigger plug-in
+supports an http rest api that can be used to trigger a build
+so here's what my hook script does and by the way my hook script is is located
+at this location this is our so-called server repo it's a bear repo with this
+name and then there's the hooks folder and then that's the name of the file
+and this is what's in the file uh this is sort of a linux thing it's a funniest again we're
+running on windows it's sort of funny but that has to be in there and then we run the curl command
+if you don't know about curl it's a very famous tool and you might want to look
+into it but basically this does an http transaction
+uh to our server here it is localhost uh port 8080. by the way this is my
+jenkins name and password not a very uh secure way of doing this but you know it doesn't
+matter and then this is the url uh this is what the uh the
+total or what the plug-in requires and then here i've added token equals and if you'll remember back in the jenkins
+setup we set up a we specified a token so that it can identify
+uh which project to run so that's all there is to the to the
+script it's pretty simple so i want to now uh
+just show you where this is i'll show you this file so here i'm in a command shell
+and um at the location here's the where this repo is stored and so we're in the
+hooks folder now you'll notice uh when any any of these get repos we'll have all these
+samples in them and these are actually hook scripts because they have dot sample at the end
+so git will ignore those but here's my post update script and that you'll
+notice doesn't say sample so if i just cat that it's what we just looked at
+that's it so that's how the hooks work and we'll see
+a demonstration of this now for a demo i'm going to do something
+pretty simple i mainly want to just show you how to look at the output of a build in jenkins
+so here i am in the ide workspace and i just modified some code let's do a get
+status and you can see i modified this file at
+main let's do a git diff and you can see i added a function
+called dummy i create a pointer and i set it to null and then i immediately
+use that pointer now the compiler didn't notice this it didn't complain
+but i believe the static code analysis will so i want to push this code to the server
+so i am first going to add that file now if i do a git status
+we see that that file is ready to be committed so now i'm going to commit it
+i'm just going to say bad dummy function for the commit message
+okay and finally i want to push it to the uh to the repo to the server repo and this
+is what's going to uh invoke the get hook and trigger jenkins so as soon as i
+do this i am going to quickly switch to jenkins
+that worked so now we're in jenkins and i don't know
+if you notice it just popped up it's starting a new build it waits a little
+bit and now i believe it is starting so it is uh
+pulling the code down from git that should be fairly quick and then
+next it's going to start building it i'll pause the video now while this
+pipeline runs so the build succeeded but the static
+code analysis failed and this yellow color here means the overall build is
+unstable so let's take a look at the build in a little more detail so i can go over here
+and click on this and i come up to a page specific to this build
+i'd like to first show you the test results even though it doesn't really apply in this case these are the results of the hardware
+and the loop testing and we can drill down on this
+so here's a list of all the tests that were run here's the status and they all
+say past i just noticed these four say fixed i think that is because in the previous
+run they had failed and so it's trying to tell you that there was a change there is a duration
+here they're all zero because i believe i need to do more work in the test script if i want those durations to be
+there so now let's go back to the the build
+and a key source of information is the console output so this is
+the output from all of the steps in the pipeline and it's a big file usually because it's
+doing all the builds and whatever i'm going to look for static analysis
+so this is the static analysis.bat
+file and it executes somewhere in here here's cpp check
+and then if we go down a little further it is uh pointing out some bad code and there's that use of that pointer
+here's where the pointer is initialized to null and there's a message here saying ba
+null pointer d reference so this is a case where the compiler didn't notice this but the
+static code checker did so it's a good example of how it can help you find problems with your code
+one more thing i want to show you is this is that gmail account i set up and
+you can see there are messages this is the one for that last
+that last build it says build four has a result unstable
+so the idea here is um may sometimes these builds might take quite a while so if you are sort of
+watching jenkins you'll get an email message that says you had a problem with your build you should go check it out
+so that's it for the demo so here are the prompts for this lesson i'll just pause here for a second and
+then go through them what would be an advantage of doing the flash programming and automated test
+steps after the software has been packaged and ready for delivery
+well ideally the software should be installed into flash memory or the product exactly how it would be done by
+a normal user now in our simple project there is no official installation
+procedure so it didn't matter why do you think jenkins waits for a few
+seconds before starting the build after getting a trigger from git
+well this is simply a guess but perhaps if the project uses two git repos and you want to give the person
+time to push both repos before the build starts you can by the way i think tune that
+number uh of how long it waits to a higher value you could make it for example 30 seconds or something
+well this is the end of the lesson on jenkins i hope it was useful and thanks for watching

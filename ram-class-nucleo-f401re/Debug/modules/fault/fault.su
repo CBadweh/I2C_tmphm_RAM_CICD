@@ -1,0 +1,16 @@
+../Drivers/CMSIS/Include/core_cm4.h:1939:34:__NVIC_SystemReset	4	static,ignoring_inline_asm
+../Drivers/CMSIS/Include/mpu_armv7.h:188:22:ARM_MPU_Enable	16	static,ignoring_inline_asm
+../Drivers/CMSIS/Include/mpu_armv7.h:200:22:ARM_MPU_Disable	4	static,ignoring_inline_asm
+../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_ll_cortex.h:584:22:LL_MPU_ConfigRegion	24	static
+../modules/fault/fault.c:234:9:fault_init	16	static
+../modules/fault/fault.c:253:9:fault_start	16	static,ignoring_inline_asm
+../modules/fault/fault.c:384:6:fault_detected	16	static,ignoring_inline_asm
+../modules/fault/fault.c:449:6:fault_exception_handler	24	static,ignoring_inline_asm
+../modules/fault/fault.c:474:10:fault_get_rcc_csr	4	static
+../modules/fault/fault.c:493:13:fault_common_handler	32	static,ignoring_inline_asm
+../modules/fault/fault.c:546:13:record_fault_data	40	static
+../modules/fault/fault.c:603:13:wdg_triggered_handler	16	static
+../modules/fault/fault.c:618:16:cmd_fault_data	24	static
+../modules/fault/fault.c:651:16:cmd_fault_status	24	static
+../modules/fault/fault.c:702:16:cmd_fault_test	40	static
+../modules/fault/fault.c:736:13:test_overflow_stack	8	static

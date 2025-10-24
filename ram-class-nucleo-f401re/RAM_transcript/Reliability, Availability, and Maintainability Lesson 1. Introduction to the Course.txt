@@ -1,0 +1,336 @@
+hi my name is gene schrader and this is
+a video course on reliability
+availability and maintainability theory
+and practice on stm32 there are seven
+videos including this one and the total
+runtime is about three hours
+now this is a general topic that applies
+to a lot of types of systems but it is
+particularly important for embedded
+systems i like it because it gets you
+close to the hardware and it's a very
+unique type of processing one part of it
+is dealing with very bad events that you
+hope will never happen
+and i call it panic mode processing just
+to give you an idea
+i've worked in embedded for 40 years and
+i know that these events do occur and i
+have a few stories to tell about it
+throughout the course
+you could say that this is an area that
+separates
+university projects and demos from real
+world products and for that reason it
+isn't often covered much in courses on
+on embedded because in those courses
+usually you have enough to do just to
+get the basic operation
+so i think this course would be useful
+for people working in the embedded field
+but i think students might also find it
+useful just to get a broader view of
+what embedded is all about
+so here's the outline of this first
+video which i'll go through briefly
+so first i go over the course objectives
+and content
+then i discuss suggested prerequisites
+for you doing this course then i talk
+about the hardware and software i used
+in developing the course and finally
+there's some course notes on things like
+github repos
+here are the course objectives and
+content
+the first objective is to simply learn
+the meaning of reliability availability
+and maintainability which is abbreviated
+as ram by the way this abbreviation of
+ram is unfortunate and confusing but
+this is what is used so understanding
+that terminology is important because it
+allows you to speak precisely with
+others and read articles and
+documentation and know what they're
+talking about
+the next objective is to learn about
+techniques of ram on embedded this is
+the bulk of the course and each of these
+techniques is a lesson
+for each of these techniques i give some
+background or theory maybe some
+requirements and design notes
+and then go over the implementation and
+do a demo and i usually end the lesson
+with some prompts or questions for
+discussion
+so the techniques
+are listed here i'll start with
+lightweight logging to a circular buffer
+which is dumped to flash on faults and i
+liken this to a flight recorder on an
+aircraft that lets investigators know
+what happened before a crash
+then there is a lesson on handling of
+faults of different types and the
+processing being done in panic mode this
+is sort of the core of the software for
+this course
+then we have watchdogs sometimes
+referred to as watchdog timers that
+monitor
+your software make sure it's all running
+next is stack overflow protection which
+relates to memory
+and finally we have audits and asserts
+this
+lesson is a little bit different because
+um
+it's just a discussion of the techniques
+and there's no implementation or demo
+another objective that's really on me is
+to have complete implementations with
+field grade designs
+this doesn't mean the
+code is bug free i hope it's pretty good
+but what i saying here is that they're
+based on sound designs and
+this is what i've done in all my
+youtube courses
+so this means that new software modules
+developed for this course conform to the
+super loop architecture and can coexist
+with modules performing um their own
+often unrelated uh functions this is a a
+proper super loop design
+and another thing is new software
+modules need to provide debug and test
+capabilities i just view that as a
+requirement and to do a complete job
+finally i just want to mention this
+course is software oriented but uh keep
+in mind that hardware can play a big
+role in
+ram as well as in safety
+i want to discuss suggested
+prerequisites for this course now if you
+are interested in the topics
+feel free to ignore these suggestions
+and just go for it
+i understand that sometimes you just
+want to view a course to get sort of an
+idea of what it's about even if you
+can't follow some of the details so
+first of all this course is a
+continuation of my youtube course with
+this long title
+that course included
+you know getting started with embedded
+using the
+stm32 and the ide
+it also included the development of a
+software infrastructure layer
+or architecture based on the super loop
+and module pattern and there's a link to
+this course in the notes for this video
+so in the in this course we're looking
+at now
+the software is based on that module api
+established in the base course and it
+uses a number of infrastructure modules
+from the base course things like timers
+and console
+now
+compared to my base course just to be
+clear this one is more advanced it
+includes things like exception handling
+details on the stack
+editing linker scripts and system
+programming in in general
+so
+the suggested prerequisites are first
+either my base course on bare metal
+embedded or a similar knowledge of mcus
+in embedded
+programming
+another prerequisite is c programming
+and i say greater than a beginner level
+uh if you don't know c or maybe just
+know a tiny bit about c um some parts of
+this class you'll probably it'll be
+difficult i'll say but you know
+if you're willing to learn as you go um
+it would work out fine
+and then finally a willingness to cover
+a lot of concepts and technology that
+might be new to you and also looking at
+reference manuals to dig into things
+deeper
+there are a lot of specialized topics in
+this
+course
+here i'll tell you about the hardware
+and software i used in developing this
+course the main thing was this stm32
+nucleo board and you can see the mcu
+model that's on that board
+i also used an adafruit
+temperature and humidity sensor for one
+of the demos but it's really a tiny part
+of the course
+so do you need this hardware well if you
+wanted to experiment with my code
+directly using this exact hardware
+hardware will make it the easiest sense
+it should just compile
+if you have other hardware
+it's going to take some work most likely
+to reuse my code because
+you know there'll be hardware
+differences that
+you'll have to make changes for
+or you might just
+want to watch this court course to
+understand the concepts and get the
+ideas uh watch the demos and in that
+case you don't need any hardware at all
+in terms of software
+here is the list everything is
+uh free
+i mentioned the ide here i did use this
+um when developing the software mainly
+for the debugger
+and uh
+but it's not really shown up in the in
+the lessons
+the assumption is the code got developed
+and i don't really go through that step
+by step
+i also mentioned python here because i
+wrote a python tool as part of this
+course to decode fault reports it's
+called the formatting tool and i use
+that in the demos
+this is a good example of why knowing
+python is a useful skill for embedded
+developers now to be clear i don't go
+into the implementation of this tool so
+you won't see any python code in the
+course but of course if you wanted to
+run that tool you would need to make
+sure you have python installed on your
+development machine
+now this last point is about
+infrastructure software that runs on the
+mcu this is just saying i'm using code
+that i developed in previous lessons
+and all that code
+both the new code for this lesson and
+and what i it's based on from previous
+lessons it's all in the github repo for
+this course
+before i get into the real lessons i
+want to give you an idea of the software
+architecture that i developed in the
+introductory course on an embedded and
+since that course i continue to build on
+that architecture normally through
+creating new modules and enhancing
+existing ones now this diagram is really
+busy and i won't go through it in great
+detail
+but this
+shows all of the software contained in
+the mcu image and i think it's often
+useful
+to get the complete picture on one page
+and i will go through a few things first
+everything above this purple line
+is code that i wrote for this course or
+previous courses and that's in the
+github repo for this course everything
+below this purple line
+is standard c libraries that came with
+the tool chain or code provided by the
+ide including code generated by the ide
+now at the very top we see
+new modules developed for this course
+they are outlined in red and have red
+text and they are i'll just briefly
+mention them this is the lightweight
+logging
+module this is the fault module that is
+sort of the core of the software for
+this course this is the watchdog module
+and this is a flash module just used to
+write data to flash
+you can also see some of these other
+modules these were existing ones that i
+sort of refer to as
+infrastructure
+now
+the modules with the sort of gray
+background are ones that
+interface to hardware and they either
+use the
+stm32ll library where ll stands for low
+level
+or they use the simsys library
+now these modules with a yellow
+background
+do not
+directly access
+uh the live the um hardware instead they
+make use of these other modules um
+to which provide a generic api that is
+hardware independent so these modules
+essentially provide some
+hardware abstraction
+and finally this box here just shows the
+module startup code in the super loop
+where all of the higher level modules
+are integrated
+here are some final notes
+now youtube does not allow you to easily
+update videos so any corrections or
+clarifications to a video will be
+put in a youtube video comment for that
+video
+and it'll be pinned as the first comment
+i also put
+uh corrections and clarifications in the
+notes for the video
+now there are two youtube or github
+repos for this course this first repo uh
+is for the source code this includes the
+source code from my base embedded course
+plus additions and enhancements for
+courses i've created since then
+including this course
+this does not include the code provided
+by the ide
+so the other
+repo is for course materials this
+includes some documentation
+plus a zip file of my
+stm32 cube ide project so this zip file
+includes the source code provided by the
+ide
+and there is a readme
+in this repo that describes the
+documents and where i got them
+now links to these repos can be found in
+the notes for this video
+i also just want to mention i used
+windows 10 as my development machine
+for this when i developed this course
+but the tools used like the ide are
+meant to run on other platforms like
+linux and mac os
+so if you try this course i would be
+interested to hear what you think so
+please use any of the normal youtube
+communication methods
+so that's it for the introduction thanks
+for watching

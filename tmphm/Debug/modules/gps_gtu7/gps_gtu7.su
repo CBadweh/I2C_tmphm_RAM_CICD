@@ -1,0 +1,11 @@
+../modules/gps_gtu7/gps_gtu7.c:141:9:gps_get_def_cfg	16	static
+../modules/gps_gtu7/gps_gtu7.c:161:9:gps_init	16	static
+../modules/gps_gtu7/gps_gtu7.c:179:9:gps_start	16	static
+../modules/gps_gtu7/gps_gtu7.c:207:9:gps_run	16	static
+../modules/gps_gtu7/gps_gtu7.c:251:16:cmd_gps_status	48	static
+../modules/gps_gtu7/gps_gtu7.c:282:16:cmd_gps_map	32	static
+../modules/gps_gtu7/gps_gtu7.c:309:13:process_msg	56	static
+../modules/gps_gtu7/gps_gtu7.c:393:13:sat_idx_to_char	16	static
+../modules/gps_gtu7/gps_gtu7.c:414:14:csv_get_token	24	static
+../modules/gps_gtu7/gps_gtu7.c:430:13:display_map	80	static
+../modules/gps_gtu7/gps_gtu7.c:490:27:cleanup_tmr_cb	32	static

@@ -1,0 +1,10 @@
+../modules/console/console.c:108:9:console_get_def_cfg	16	static
+../modules/console/console.c:129:9:console_init	16	static
+../modules/console/console.c:149:9:console_run	16	static
+../modules/console/console.c:231:9:console_data_print	16	static
+../modules/console/console.c:245:6:console_emit_prompt	8	static
+../modules/console/console.c:257:5:printc	264	static
+../modules/console/console.c:287:5:vprintc	264	static
+../modules/console/console.c:306:6:printc_float	32	static
+../modules/console/console.c:338:9:console_tx_idle	8	static
+../modules/console/console.c:355:5:printc_panic	264	static

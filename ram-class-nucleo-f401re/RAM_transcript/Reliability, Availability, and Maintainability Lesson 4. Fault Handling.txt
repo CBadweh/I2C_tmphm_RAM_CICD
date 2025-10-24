@@ -1,0 +1,365 @@
+in this lesson i cover fault handling and default module you might view this module as the base software for this
+course it handles faults in general regardless of where or how they were detected
+now the stack overflow protection feature is implemented in this fault module but that's a big topic and i
+cover it in its own lesson and i cover writing to flash in this lesson even though it's in its own
+software module it's not a core topic and i don't cover it in great detail
+so there's a lot of material in this lesson and it gets pretty hairy here and there i find this kind of stuff challenging
+and rewarding and i hope you will also so let me quickly go through an outline of this lesson i start with the
+requirements of what we want it to do then i go through a number of design topics and describe how the mcu itself
+deals with faults then i talk about writing to flash since we save fault data to flash
+then i go through the flash module api and implementation and then the fault module api and
+implementation then i do a demo where we force a fault and then analyze it
+and finally there are some prompts or questions for you to consider and for each one i give you my take on
+it so here are the requirements for the fault module the following types of faults must be
+supported for example cpu detected faults such as use of an invalid pointer
+one that doesn't point to any hardware invalid memory operation for example writing to read-only memory and this
+includes stack overflow into a read-only stack guard area things like integer
+divide by zero illegal instruction and then other faults that are not
+directly detected by the cpu would be watchdog trigger and faults detected by the application
+software such as some very serious data structure uh corruption and it can't it decides it
+can't go on so upon the fault detection write the following info
+which i refer to as fault data to flash and to the console the type of fault
+the program counter and stack pointer at the time of fault if possible selected cpu registers and system
+registers containing fault information the arm architecture defines the system records or system registers
+and then the lightweight log buffer and if you're lucky that lightweight log buffer will show what some
+very useful information about what was happening before the fault occurred so if the flash already contains a fault
+recording do not overwrite it but still write the fault data to the console and
+the idea here is if you're in sort of a continuous reboot scenario you don't want to just keep
+writing that uh page of flash again and again or you could wear it out
+so after writing the fault data there's nothing more to do so reset the mcu now this might imply we're doing an
+automatic recovery kind of thing versus fail safe but it really depends on what the system
+does after it restarts in other words does it start
+going does it go right back into operation or does it just sit there and wait for something to happen
+and then finally the fault data is written in a raw sort of binary format and you don't want to
+decode that by hand so there's a requirement to provide an offline formatting tool to make the fault data
+easy to read and we'll be using this tool throughout the course i'd like to say a little about mcu reset
+since we generate resets from the fault module typically the reset pin on an mcu is
+both an input and an output this is accomplished using a hardware technique called open drain or open collector and
+the details really aren't important so the pin acts as an input when an
+external entity is resetting the mcu for example the reset button
+and the pin acts as an output when the mcu generates a reset which is what we
+do in the fault module so in this case the mcu
+is telling the hardware that i'm doing a reset
+now the key to this is that an mcu-initiated reset can reset
+external hardware and this can be very important and can be a factor in
+selecting hardware so if we go down here we have here's the reset
+line or signal here is the mcu it has a what's called a pull-up resistor on this signal
+and that's just a hardware detail and here we have the reset button and
+when we press this it causes a reset on this signal
+that's then an input to the mcu causes the mcu to reset it's actually an input to these other two devices as well
+so here we have two devices that are connected to the reset
+line one is a temperature humidity sensor and the other is an i o expander both have i squared c
+interfaces now the reset signal on these might be critical uh for example in the case of
+this i o expander you want to be certain that when a reset occurs that these
+outputs all go off the other reason that these reset inputs
+can be important is that devices especially more complex devices can get
+stuck and stop working and the only reasonable way to get them
+going again is through this reset signal i've seen this happen if you look at my i squared c course
+you'll see a demo of a device that i do something to get it stuck
+and and it requires a hardware reset to get out of it the last box i show is a
+voltage supervisor what it does is monitors the system voltage and it holds
+the system and reset unless the power is good and this is normally when you first
+apply power to a system although it also occurs when the system is going down and losing power
+so mcus can also do this on their own
+but maybe not quite as well as these voltage as a voltage supervisor and so they're sometimes used uh when there's a
+particular need for it so here are some design notes so fault handling is performed in what
+we call panic mode and generally panic mode is used when the system is in a bad state and you really can't trust
+anything to work normally you are headed towards a reset so you tend to work at a very simple
+primitive level and you don't worry a lot about efficiency
+so in panic mode we disable the interrupts we reset the stack pointer to the top of ram to ensure we have a good
+stack and we use polling not interrupts or dma for all
+hardware operations for for example writing to uart and flash
+now in case fault handling gets stuck the hardware watchdog should reset the
+mcu so that's sort of our backup so we talked about in the requirements
+about the fault data and so we have to put that in some kind of uh format and so
+first of all the data is written to flash in binary format and it's written to the console in hexadecimal text
+format the data is organized in sections where each section starts with a magic number
+and a length and the magic number tells the formatting tool what kind of data is
+in there and the sections uh for a fault are the first one is a generic is the
+generic fault data including fault type register values and so forth then there's a section that contains the
+lightweight log buffer and then there is a section which is just an end marker
+there's really no data in it but it tells you that you have the complete set of data
+default data section sizes must be a multiple of the minimum flash right size
+that's a restriction put on by the flash and it's typically 8 or 16 bytes
+so here's a simple diagram of the fault data block and just as i stated it's
+broken into three segments one for general fault data one for the lightweight log buffer and then an end
+marker and within each segment it starts with a magic number and a section length and
+then followed by data and that's all there is to it
+now i want to talk about exception processing now this discussion is specific to the arm cortex
+m4 mcus which use the arm v7-m architecture and down here at the
+bottom i have a reference an arm document where you can find this
+information the version of the document i used here is in the github repo called
+ram dash class dash 1-materials that i mentioned in the
+introductory video or you can just go to the arm site and get the latest version of it
+so exception processing starts when a fault is detected or an interrupt occurs
+and then the address of the handler code is found in the vector table
+so i have two tables here that i snipped from the architecture reference manual
+this table b1-4 on the left lists the exceptions which are either
+faults or interrupts and it gives their exception number
+and over here table b1-5 on the top describes the layout of
+the vector table and basically the exception number is used as an index into the vector table
+to get the handler address now index 0 is a special case for the stack pointer
+so the exceptions of greatest interest are those due to faults detected by the
+cpu listed here and these are the things discussed in the requirements and they were discussed in more
+general terms also of interest are exceptions we never expect for
+example interrupts from devices like a uart or an spi that we are not using
+even we even though we don't think they will ever occur we should be prepared just in case and
+there's really no extra work to do this so the initial
+handler which is found via the vector table needs to
+collect critical information and then call or jump to a secondary handler that's
+actually in the fault module so for our mcu the initial exception handler is
+coded in assembly so we will write a tiny amount of assembly code really as little
+as possible because we want to do as much work as possible in c
+so the secondary handler in c in the uh fault module
+continues to collect information and it ultimately generates a fault data report
+as described in the requirements and then it resets the mcu
+on this slide i have a little more information about what happens in exception processing regarding the stack
+the reason is we will want to collect this information for the fault report so we have this figure
+b1-3 again from the arm architecture reference manual and it shows how key
+state information is saved on the stack when an exception occurs now these two
+stacks here are for the two cases of whether the stack pointer
+was on a four or an eight byte boundary for reasons i don't know the exception
+stack information must be on an eight byte boundary so in this case on the left
+an extra word was added to achieve that so we can see what is saved first some
+general purpose registers and then the link register which is also r14 then the return
+address of where we were executing when the exception occurred and then a processor status register
+now if you look in the reference manual you'll see that if there is an fpu floating point unit and it's active then
+the floating point registers will be pushed on the stack as well and they'll be up here
+but the fault handler is only collecting information starting at r0 going through the processor status register so we
+don't really have to worry about whether this uh padding word is here or whether
+there are floating point registers up here because we we will be using this
+the new stack pointer and we'll be addressing relative to that and will only be going up to this point
+here i have a few notes about writing to flash now this topic is sort of outside the main scope of this course so i don't
+want to spend too much time on it but we do write to flash so i need to cover it and the flash code is put in its own
+module in case i ever want to use it for something else so
+i want to point out as well that this discussion is specific to the
+stm32mcus i have worked with so typically to write
+to flash you have to first erase it it's not like ram where you can just overwrite a value
+typically you can only erase flash in chunks referred to sometimes as a page
+sometimes as a section or a block sometimes all the pages of
+flash in the mcu are the same size and sometimes they're different sizes for the mcu we are using their different
+sizes you might want or you might also be able to erase all the flash in one operation we don't do that but just
+wanted to point that out now when you write to this erased flash it generally
+must be on some even boundary for example the address must be a multiple of 8 or 16. and the amount of data must
+be a multiple of 8 or 16 bytes for example so we need to reserve a page of flash
+for fault data so we're using the gcc tool chain which is
+used by our ide and the code and data are mapped to flash in the linker script
+now one easy way uh solution to choosing a page is just to use the last page of
+flash and as long as your code isn't using all pages of flash
+uh this is simple however for the mcu we're using this one
+the pages of flash are of variable sizes and the ones at the end
+are very large so i don't want to reserve that last page because it's it's big
+so what i do instead is i take the second page of flash after the vector
+table and reserve it for fault data because that page is much smaller now this does require
+some editing of the linker script and we'll see that here we are in the flash header file and
+i just want to show you the simple api for this
+so this is the start function which is just a standard uh
+module function for startup and then there are just two apis one is
+to erase a page and one is to write data and notice the word panic is in these uh
+api names that's because they are used in panic mode which means
+they block they don't use interrupts they do polling here we are in the implementation file
+for flash i'll go through this very briefly so first we're going to look at the
+function that erases a page of flash
+so here it is and i'm not going to if you look at the reference manual it gives you sort of
+step-by-step instructions of how to do an erase and then how to do a write and so that's pretty much what this code
+follows there are not ll api functions for this so i'm
+referencing the registers directly fortunately there are symbols defined
+for all the uh registers so i don't have to do that myself so it's writing to i
+believe this is called a control register and it's just writing bits based on the instructions
+and you can see that there's these ifs because it's done slightly differently for different mcus
+and after we get it all set up then this is common code that actually starts the
+erase and then we sit in a while loop waiting for the erase to finish and we're
+looking here at the at a status register and then there is this function i won't
+go through it it just does some common cleanup and that's pretty much it so the next thing is the uh the write
+function it's the same thing look in the reference manual gives you more or less step-by-step instructions and you you
+write these registers and set them up as it asks you to do and uh here is the actual loop where it
+writes the data so there's that and every time it writes a chunk of data
+it has to uh wait for it to finish and uh and then when it's all finished
+again it calls this function which does some cleanup and that's it
+now we're in the linker script and i wanted to show you how i reserve space for the fault data in flash i would have
+liked to put the fault data in the last page of flash as i did in other mcus but
+in this mcu the pages at the end of flash are quite large while the pages at
+the beginning of flash are smaller and i didn't want to use one of those large pages and waste a lot of flash
+so this makes it a little bit more difficult but it's not too bad
+so first this has changed quite a bit uh it used to just have ram and flash
+i uh created these these two new uh sections and i modified the flash
+section so this first section is where the vector table goes it has to be at the beginning and so it's one page at
+16k of memory following that is the fault data and it's also one page 16k
+following that is the redefined flash area which starts
+after default data it used to be 512 k if you add all these three you get 512k
+now it's 480k so that's one change i had to make and then in these sections where we
+assign code in data i had to pull out the vector table on its
+own and so that gets assigned to this new isr vector area
+and nothing gets assigned to the fault data area because that's handled programmatically
+from the software and then everything else as normal goes into the
+flash area which is now a little bit smaller so that's how it was done
+not too bad here we are in the fault module header file and i'll just briefly show you the
+api so the first thing i want to point out is this enumeration which is the fault
+type and we currently just have two watchdog and exception
+in terms of the function apis these two are standard
+module apis i call them part of the core api and they're just used during system initialization
+and then these remaining apis are specific to the fault module
+so this first one here fault detected can be called by any code to say i have
+detected a fault and it passes the type of fault and and some parameter
+and the fault module will collect some information generate a fault report and then reset
+the mcu so this function never returns this function is somewhat similar but
+it's specific to exceptions when a fault or unexpected interrupt exception
+occurs first there is a an initial handler that's written in
+assembly and that handler will very quickly call this this uh c
+function and it passes it the stack pointer at the time of the exception
+so again this uh handler generates default report and so forth collects
+information and then it resets the mcu so it will never return
+so here we are in the fault implementation file so the first thing i want to look at is
+a data structure
+and this is the fault data and so this is the magic that begins
+all these data segments and then here's the fault type and the parameter and this is all the data that we collect
+about the fault and this will ultimately be written to flash
+and the console and we'll be looking at code that fills uh this structure in
+so now we're going to look at the fault handlers and the first one
+is here now this is for faults that are not exceptions
+so an example would be a watchdog triggers and this will get called so we go into panic mode
+and we disable the mpu which is just a precaution and now we're going to start collecting the fault data and put it in
+that fault data structure and that's what this is doing and then we call
+a common fault handler and we'll look at that in a little bit so this is the other type of fault this
+is when we get an exception and if you'll remember when an exception
+occurs some information gets pushed onto the stack and we want to save that information in
+the fault data if we can so here is the entry point and notice the
+stack pointer at the time of the of the exception is passed in
+we again go into panic mode we start to collect fault data and then here's where
+we want to get that data that was pushed onto the stack when the exception occurred
+before we do that we have to take a good look at that stack pointer that was passed in make sure it's valid
+it's pointing into the stack and so forth if everything is okay then we do a mem copy
+of that information off of the stack for the exception and we copy that into the
+fault data structure and then we once again we call the common handler
+so here is the common handler and uh it
+it fills in even more of that fault data including all of these system registers
+that are useful in the fault case it gives additional detail so now
+we have that fault data structure filled out and we can record it and so we have
+this function called record fault data we'll look at that in just a minute after that's done we record the lwl
+buffer and there's an api to get the address and length of the lwl buffer so
+it can record that and then there's that end marker which is just that tiny little section at the end
+and when all of the recording is done we call this uh function which resets
+the mcu and that's that's the end of it so let's look at the record fault data
+and there's two sections one is to to re write the data to flash and the other
+section is to write it to the console now the flash has that special requirement that says that the data if
+there's already fault data there don't overwrite it and what it does in this
+line here it's looking into the flash and it's basically looking to see if that magic number is there if that magic
+number is there that means there's fault data there don't write anything
+if and if if it should write something then this new flash will be true and then um
+if the data offset is zero it means we're just starting it erases the page which is right here
+and uh and then after that it writes the data so that's that's it now here's the
+console the console is a little is is simpler because it's just doing basically printing the data out as
+hexadecimal and that's not too tricky so the last thing
+i want to show you is a console command called fault test and
+we'll be using this in some of the demos the one i want to look at here is bad
+pointer and let's see what that bad pointer does if if you
+enter uh from the console fault test pointer it will get to this point uh
+here's where it detects uh that operation and so what it does is it takes this
+value all f's it casts that to a pointer to an unsigned 32 and then it
+tries to write to that location there's no way that's going to work that's going to generate a
+fault so uh that's uh it for the fault module
+here i am in the assembly language file that has a vector table and a startup code and here is where i modified an
+exception handler to call the c function in the fault module
+so i need to look for the label default underscore handler and here it is
+and this handler is used for all exceptions that don't have
+specific handlers and this is actually nearly everything the only exceptions that have handlers
+are mainly interrupts for the peripherals we're using like uarts so by default
+the default handler this is the code it just branches to
+itself in an infinite loop so what i replaced it with are these three instructions so the first
+instruction takes the current value of the stack pointer and moves it into r0 and when
+you call a function r0 is the first argument then i reset the stack pointer as is
+done on initialization to be the highest value in ram so now we know we have a good stack and then i just simply branch
+to that c function in the fault module and that's all there is to it
+now for the demo we're going to do the bad pointer test and analyze the result
+so here i am in the console and i'm going to reset the system pushing the black button
+and we're getting that logging again from the temp hum module so i'm going to enter control l which
+stops that and now i'm just going to do the fault
+test pointer and the system just reset and i'm going to
+stop logging again so what happened uh when we entered that as
+you know it did something uh bad and it's here is where it dumped out the um
+default data to the console and we're going to grab that
+and we're going to put in a file so we can use the formatting tool
+so here i'm in the fault directory in the source code tree and this directory just has the fault.c file and the
+formatting tool uh which is called log format dot py it's a python program i'm
+not going to look at the implementation of this you can take a look if you want now to run this tool you first have to
+put default data in a file and i've done that and called the file raw dot text so
+let's just cap that and that's what came out when the fault occurred
+and so now we're going to run the tool and to do that
+you have to tell it where the source code is because it needs this is for the
+lwl stuff it needs to find that those lw statements in the source code in order to decode it so
+if i just point to the parent directory it will be able to find all the code from there and then you need to tell it
+where your raw text is and i'll tell it that
+and there you saw all the the formatted text flyby now i'm going to do this again but i'm
+going to put it in a file that we can look at in an editor called decode1 dot text
+and so there we are so here's the decoded data so the first thing we see in here is the
+fault type now this is that enum in fault.h and this means it was an exception the fault parameter is the
+exception number and three is hard fault then this is the data that was taken off
+of the exception stack and here's sort of an interesting thing
+register 2 contain the value bad which is what we were trying to write
+what would be most interesting in this is this return address this 800 c 974
+i expect that will be in that uh fault test command
+for bad this would be in that line of code where it's setting uh you know doing that bad
+address and trying to write to it so we have also the stack pointer at the
+time of the fault uh this link register um this is like a return address this gets into arm how
+arm works and i won't go into that right now and so uh and then there's these
+additional uh fault registers here so after that we see the uh lwl
+trace um this skip data at the beginning what this means is i don't think we've
+actually filled up the circular buffer by the time the fault occurred because i did a reset and uh we don't have a lot of trace
+going in here right now just these ticks and these temperature humidity measurements so it didn't get
+full and of course in this case there if we go to the end so this is this is the
+last trace before the exception uh there's nothing interesting in here mainly because we haven't put
+much interesting stuff in in the logging in a real application
+presumably there'd be a lot more things in here by the way this we do print the uptime and it had been running for 16
+seconds when the fault occurred so this gives you an idea so if if this
+was a real you know problem let's say in the field or in the lab or something
+you would be going through this data i can tell you in in great detail and looking at all this and trying to figure
+out what happened i want to show you a few things about
+flash storage here of fault data so i'm at the console and there is a fault data
+command that will dump out default data from flash and there it is so we could
+take this data cut and paste it and decode it just like we did with the data from the console it's the same data
+so as you know there's a requirement that says if there is a ready flash data
+in there don't overwrite it so let's say you have a fault you get this data and
+you've analyzed it and now you want to make sure that the next fault gets captured and so how would you do that
+well there is a fault data erase option so
+if i do fault data erase that happened and then you might wonder
+what does the data look like now and it's all fs that's typically what uh
+flash looks like when it's been erased so that's how you manage the flash uh
+with the simple uh console commands so here are the prompts or questions for
+this lesson i'll just pause here for a second and then go through them one by one and give you my take
+how might you store multiple fault data dumps onto flash
+well if the reserved flash page or pages can hold multiple instances of the fault data then as faults occur the fault data
+can be written one after another in flash for example the mcu i was using i
+believe the page was 16k and i think i could
+store a number of fault data dumps in that area the logic to erase the page uh
+would be a little bit more complicated but uh i don't think it would be that bad
+and you know if you do have lots of flash you could of course reserve multiple pages you could reserve all of
+the extra flash maybe for uh fault data dumps
+assuming you can't get good stack back trace within your mcu software for fault
+reporting can you think of some alternative and the issue here is that with arm
+because of how arm uses a stack it is difficult to get stack back traces
+well here's an idea i have i don't know how well it would work but we expect that
+the stack will contain return addresses or functions they will be there
+you could search backwards in the stack for values that are valid flash addresses and potentially return
+addresses and you might save the first 10 or so of these values that you find
+in the fault data so then the offline formatting tool
+could automatically convert these addresses to function names and line numbers and then if you
+had that you could look at that and and you might be able to work out the back trace manually
+if you had storage where you could save the entire ram image after a fault how might you analyze it
+and i have a hint here what is the equivalent for a linux process
+well regarding that hint in linux when a process crashes it can leave a core dump file which contains the ram image
+debuggers like gdb allow you to use the core dump to do an offline analysis of
+the dead process at the source code level looking at variables and so forth
+a similar thing could be done with ram image dumps for mcus and i
+actually implemented uh something like this uh quite a while ago uh on an
+embedded system a rather large embedded system and uh once i had that working that was invaluable
+it really made working on crashes much much easier
+is resetting the stack pointer to its initial value the highest address in ram in the fault handler too drastic what
+are alternatives well doing that is simple and it's safe
+but maybe it is too drastic i really wasn't that worried that we would
+overwrite part of the stack when we're doing this but we don't really have to do it in all
+cases so an alternative is to check the current stack pointer in the fault handler and check if there is sufficient
+remaining stack to process the fault if so just leave the stack pointer alone
+another alternative is to reserve some ram for the stack for fault handling and
+this assumes you have ram to spare in this case you use that memory for the
+stack and you completely stay clear of using the normal stack you just don't touch it
+so this is the end of the fault module lesson i hope it was useful for you and thanks for watching
