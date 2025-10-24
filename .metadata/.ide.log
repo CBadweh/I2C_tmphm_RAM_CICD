@@ -59,3 +59,17 @@
 2025-10-24 13:26:42,766 [INFO] WebApp:187 - Connection restablished
 2025-10-24 13:31:56,010 [INFO] MainUpdater:2872 - connection check result : 10
 2025-10-24 13:31:56,032 [INFO] DocFrame:73 - Open Documents window for Board NUCLEO-F401RE
+2025-10-24 17:01:27,039 [INFO] WebApp:190 - Connection lost
+2025-10-24 17:01:32,872 [INFO] WebApp:187 - Connection restablished
+2025-10-24 17:22:00,068 [INFO] WebApp:190 - Connection lost
+2025-10-24 17:22:03,063 [INFO] WebApp:187 - Connection restablished
+2025-10-24 17:22:06,814 [INFO] WebApp:190 - Connection lost
+2025-10-24 17:22:07,087 [INFO] WebApp:187 - Connection restablished
+2025-10-24 17:51:51,628 [INFO] WebApp:190 - Connection lost
+2025-10-24 17:51:56,201 [INFO] WebApp:187 - Connection restablished
+2025-10-24 17:52:00,060 [INFO] WebApp:190 - Connection lost
+2025-10-24 17:52:00,335 [INFO] WebApp:187 - Connection restablished
+2025-10-24 18:39:09,027 [INFO] WebApp:190 - Connection lost
+2025-10-24 18:39:12,145 [INFO] WebApp:187 - Connection restablished
+2025-10-24 18:39:16,336 [INFO] WebApp:190 - Connection lost
+2025-10-24 18:39:16,685 [INFO] WebApp:187 - Connection restablished
