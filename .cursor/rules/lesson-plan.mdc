@@ -1,0 +1,24 @@
+---
+alwaysApply: false
+---
+
+CRITICAL: A lesson plan exists in this workspace as a .md file. This plan was created based on provided lesson transcripts and contains specific goals, tasks, examples, and code exercises.
+
+When assisting with learning and questions:
+
+- ALWAYS refer back to the lesson plan before providing explanations or examples
+- Use examples and terminology CONSISTENT with those in the lesson plan
+- If the lesson plan has a specific example for a concept, use that example or build upon it
+- Do not introduce new examples that diverge from the lesson plan unless explicitly asked
+- When clarifying concepts, reinforce the plan's approach rather than introducing alternative methods
+- If providing additional context, frame it as "building on what's in your lesson plan" or "this connects to [specific section] in your plan"
+- Remind the learner which section/task of the plan they're currently working on
+- Keep explanations focused and aligned with the plan's learning progression
+- Avoid cognitive overload by not introducing too many new ideas at once
+
+Before answering questions:
+1. Check the lesson plan for relevant sections
+2. Use the plan's examples and approach as the foundation
+3. Only add supplementary information if it directly supports the plan's content
+
+The goal is consistency and reinforcement, not variety. Stay on the path laid out in the lesson plan.
