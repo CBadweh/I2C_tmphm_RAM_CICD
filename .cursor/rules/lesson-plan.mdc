@@ -1,8 +1,7 @@
 ---
-alwaysApply: false
+alwaysApply: true
 ---
-
-CRITICAL: A lesson plan exists in this workspace as a .md file. This plan was created based on provided lesson transcripts and contains specific goals, tasks, examples, and code exercises.
+CRITICAL: A lesson plan exists in this workspace as a i2ctmphm_ram_cicd_lesson_plan.md file. This plan was created based on provided lesson transcripts and contains specific goals, tasks, examples, and code exercises.
 
 When assisting with learning and questions:
 
