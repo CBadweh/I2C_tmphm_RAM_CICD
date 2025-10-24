@@ -1,9 +1,0 @@
-../Drivers/CMSIS/Include/core_cm4.h:1939:34:__NVIC_SystemReset	1
-../App/gpio-app/app_main.c:144:6:app_main	2
-../App/gpio-app/app_main.c:173:6:__io_putchar	2
-../App/gpio-app/app_main.c:190:6:process_cmd	19
-../App/gpio-app/app_main.c:294:13:get_cmd_line	16
-../App/gpio-app/app_main.c:361:12:parse_cmd_line	8
-../App/gpio-app/app_main.c:402:26:get_port_info	4
-../App/gpio-app/app_main.c:425:20:config_gpio	8
-../App/gpio-app/app_main.c:472:20:enable_gpio_clock	8
