@@ -337,11 +337,11 @@ void app_main(void)
         INC_SAT_U16(cnts_u16[CNT_START_ERR]);
     }
 
-    result = tmphm_start(TMPHM_INSTANCE_1);
-    if (result < 0) {
-        log_error("tmphm_start 1 error %d\n", result);
-        INC_SAT_U16(cnts_u16[CNT_START_ERR]);
-    }
+//    result = tmphm_start(TMPHM_INSTANCE_1);
+//    if (result < 0) {
+//        log_error("tmphm_start 1 error %d\n", result);
+//        INC_SAT_U16(cnts_u16[CNT_START_ERR]);
+//    }
 
     result = cmd_register(&cmd_info);
     if (result < 0) {
@@ -373,9 +373,9 @@ void app_main(void)
         if (result < 0)
             INC_SAT_U16(cnts_u16[CNT_RUN_ERR]);
 
-        result = tmphm_run(TMPHM_INSTANCE_1);
-        if (result < 0)
-            INC_SAT_U16(cnts_u16[CNT_RUN_ERR]);
+//        result = tmphm_run(TMPHM_INSTANCE_1);
+//        if (result < 0)
+//            INC_SAT_U16(cnts_u16[CNT_RUN_ERR]);
     }
 }
 
