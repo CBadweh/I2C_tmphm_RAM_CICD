@@ -1,6 +1,9 @@
 #ifndef _CONFIG_H_
 #define _CONFIG_H_
 
+// Flash configuration for STM32F401xE
+#define CONFIG_FLASH_WRITE_BYTES 8
+
 // Module i2c
 #define CONFIG_I2C_HAVE_INSTANCE_1 0
 #define CONFIG_I2C_HAVE_INSTANCE_2 0

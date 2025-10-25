@@ -24,6 +24,7 @@
 
 #include "i2c.h"
 #include "log.h"
+#include "lwl.h"
 #include "module.h"
 #include "tmr.h"
 #include "tmphm.h"
@@ -31,6 +32,10 @@
 ////////////////////////////////////////////////////////////////////////////////
 // STATE MACHINE - The heart of the driver
 ////////////////////////////////////////////////////////////////////////////////
+
+// LWL (Lightweight Logging) configuration
+#define LWL_BASE_ID 30  // TMPHM module uses IDs 30-39
+#define LWL_NUM 10
 
 enum states {
     STATE_IDLE,              // Waiting for timer to trigger
@@ -146,6 +151,7 @@ int32_t tmphm_run(enum tmphm_instance_id instance_id)
             // Reserve I2C bus (st.cfg.i2c_instance_id = I2C_INSTANCE_3 = bus #3)
             rc = i2c_reserve(st.cfg.i2c_instance_id);  // i2c_reserve(3)
             if (rc == 0) {  // 0 = success
+                LWL("TMPHM_RESERVED", 1, LWL_1(st.cfg.i2c_instance_id));
                 // Got the bus! Send measurement command
                 // Copy command bytes: {0x2c, 0x06} to buffer
                 memcpy(st.msg_bfr, sensor_i2c_cmd, sizeof(sensor_i2c_cmd));  // 2 bytes
@@ -156,6 +162,7 @@ int32_t tmphm_run(enum tmphm_instance_id instance_id)
                               st.msg_bfr,                // {0x2c, 0x06}
                               sizeof(sensor_i2c_cmd));   // 2 bytes
                 if (rc == 0) {  // 0 = success
+                    LWL("TMPHM_WR_CMD", 2, LWL_1(st.cfg.i2c_addr), LWL_1(sizeof(sensor_i2c_cmd)));
                     st.state = STATE_WRITE_MEAS_CMD;
                 } else {
                     // Write failed, release and go back to IDLE
@@ -174,6 +181,7 @@ int32_t tmphm_run(enum tmphm_instance_id instance_id)
                 // Write complete!
                 if (rc == 0) {  // 0 = success
                     // Success - start waiting for sensor measurement
+                    LWL("TMPHM_WR_OK", 0);
                     st.i2c_op_start_ms = tmr_get_ms();  // Record current time
                     st.state = STATE_WAIT_MEAS;
                 } else {
@@ -190,6 +198,7 @@ int32_t tmphm_run(enum tmphm_instance_id instance_id)
             // Has enough time passed? (st.cfg.meas_time_ms = 15)
             if (tmr_get_ms() - st.i2c_op_start_ms >= st.cfg.meas_time_ms) {  // >= 15ms?
                 // 15ms has elapsed, read the result
+                LWL("TMPHM_RD_START", 1, LWL_1(I2C_MSG_BFR_LEN));
                 // Read 6 bytes from sensor (bus=3, addr=0x44, len=6)
                 rc = i2c_read(st.cfg.i2c_instance_id,  // bus 3
                              st.cfg.i2c_addr,           // 0x44
@@ -244,10 +253,12 @@ int32_t tmphm_run(enum tmphm_instance_id instance_id)
                         st.last_meas_ms = tmr_get_ms();
                         st.got_meas = true;
                         
+                        LWL("TMPHM_MEAS", 4, LWL_2(temp), LWL_2(hum));
                         // Print result (e.g., "temp=235 degC*10 hum=450 %*10")
                         log_info("temp=%ld degC*10 hum=%lu %%*10\n", temp, hum);
                     } else {
                         // CRC failed - ignore this measurement
+                        LWL("TMPHM_CRC_ERR", 0);
                         log_error("CRC error\n");
                     }
                 }
@@ -294,9 +305,10 @@ int32_t tmphm_get_last_meas(enum tmphm_instance_id instance_id,
 static enum tmr_cb_action tmr_callback(int32_t tmr_id, uint32_t user_data)
 {
     // If IDLE, start a new measurement cycle
-    if (st.state == STATE_IDLE)
+    if (st.state == STATE_IDLE) {
+        LWL("TMPHM_TMR_TRIG", 0);
         st.state = STATE_RESERVE_I2C;  // Move to next state, tmphm_run() will handle it
-    else
+    } else
         // State != IDLE means previous measurement still in progress!
         // This shouldn't happen if timing is correct (measurement takes ~20ms, timer is 1000ms)
         log_error("Timer overrun - previous measurement not done!\n");

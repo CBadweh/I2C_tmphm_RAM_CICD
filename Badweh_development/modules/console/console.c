@@ -253,6 +253,33 @@ int vprintc(const char* fmt, va_list args)
     return rc;
 }
 
+/*
+ * @brief Print binary data in hex format.
+ *
+ * @param[in] data_ptr Pointer to data to print.
+ * @param[in] num_bytes Number of bytes to print.
+ *
+ * @return 0 for success, else a "MOD_ERR" value.
+ * 
+ * Prints data in hex format for lwl dump command.
+ */
+int32_t console_data_print(uint8_t* data_ptr, uint32_t num_bytes)
+{
+    uint32_t idx;
+    
+    for (idx = 0; idx < num_bytes; idx++) {
+        if (idx % 16 == 0) {
+            if (idx > 0)
+                printc("\n");
+            printc("%04lx: ", idx);
+        }
+        printc("%02x ", data_ptr[idx]);
+    }
+    printc("\n");
+    
+    return 0;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Private (static) functions
 ////////////////////////////////////////////////////////////////////////////////

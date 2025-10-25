@@ -38,6 +38,7 @@
 #include "gps_gtu7.h"
 #include "i2c.h"
 #include "log.h"
+#include "lwl.h"
 #include "mem.h"
 #include "module.h"
 #include "tmphm.h"
@@ -340,6 +341,15 @@ void app_main(void)
         log_error("tmphm_start 1 error %d\n", result);
         INC_SAT_U16(cnts_u16[CNT_START_ERR]);
     }
+
+    result = lwl_start();
+    if (result < 0) {
+        log_error("lwl_start error %d\n", result);
+        INC_SAT_U16(cnts_u16[CNT_START_ERR]);
+    }
+
+    // Enable LWL recording
+    lwl_enable(true);
 
     result = cmd_register(&cmd_info);
     if (result < 0) {

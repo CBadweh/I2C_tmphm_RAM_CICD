@@ -43,6 +43,11 @@
 #define MOD_ERR_OP_IN_PROG   -9
 #define MOD_ERR_UNAVAIL      -10
 
+// Magic numbers for data structures in flash/RAM
+#define MOD_MAGIC_FAULT 0xdead0001
+#define MOD_MAGIC_LWL   0xf00d0001
+#define MOD_MAGIC_END   0xc0da0001
+
 // Get size of an array.
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 

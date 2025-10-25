@@ -34,6 +34,7 @@ modules/dio \
 modules/gps_gtu7 \
 modules/i2c \
 modules/log \
+modules/lwl \
 modules/mem \
 modules/stat \
 modules/tmphm \

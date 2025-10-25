@@ -14,6 +14,7 @@ RM := rm -rf
 -include modules/tmphm/subdir.mk
 -include modules/stat/subdir.mk
 -include modules/mem/subdir.mk
+-include modules/lwl/subdir.mk
 -include modules/log/subdir.mk
 -include modules/i2c/subdir.mk
 -include modules/gps_gtu7/subdir.mk

@@ -19,6 +19,7 @@
 "./modules/gps_gtu7/gps_gtu7.o"
 "./modules/i2c/i2c.o"
 "./modules/log/log.o"
+"./modules/lwl/lwl.o"
 "./modules/mem/mem.o"
 "./modules/stat/stat.o"
 "./modules/tmphm/tmphm.o"

@@ -29,11 +29,16 @@
 #include "tmr.h"
 #include "cmd.h"
 #include "console.h"
+#include "lwl.h"
 #include "i2c.h"
 
 ////////////////////////////////////////////////////////////////////////////////
 // MACROS - Interrupt control
 ////////////////////////////////////////////////////////////////////////////////
+
+// LWL (Lightweight Logging) configuration
+#define LWL_BASE_ID 20  // I2C module uses IDs 20-29
+#define LWL_NUM 10
 
 #define INTERRUPT_ENABLE_MASK (LL_I2C_CR2_ITEVTEN | LL_I2C_CR2_ITBUFEN | \
                                LL_I2C_CR2_ITERREN)
@@ -528,6 +533,7 @@ static void i2c_interrupt(enum i2c_instance_id instance_id,
             case STATE_MSTR_WR_GEN_START:
                 // START condition sent?
                 if (sr1 & LL_I2C_SR1_SB) {
+                    LWL("I2C_WR_START", 2, LWL_1(st->dest_addr), LWL_1(st->msg_len));
                     // Write address with W bit (bit 0 = 0)
                     st->i2c_reg_base->DR = st->dest_addr << 1;
                     st->state = STATE_MSTR_WR_SENDING_ADDR;
@@ -537,6 +543,7 @@ static void i2c_interrupt(enum i2c_instance_id instance_id,
             case STATE_MSTR_WR_SENDING_ADDR:
                 // Address ACKed?
                 if (sr1 & LL_I2C_SR1_ADDR) {
+                    LWL("I2C_WR_ADDR_ACK", 1, LWL_1(st->dest_addr));
                     // Clear ADDR flag by reading SR2
                     (void)st->i2c_reg_base->SR2;
 
@@ -562,6 +569,7 @@ static void i2c_interrupt(enum i2c_instance_id instance_id,
                     } else {
                         // All bytes sent, wait for BTF before STOP
                         if (sr1 & LL_I2C_SR1_BTF) {
+                            LWL("I2C_WR_DONE", 1, LWL_1(st->msg_len));
                             op_stop_success(st, true);
                         }
                     }
@@ -573,6 +581,7 @@ static void i2c_interrupt(enum i2c_instance_id instance_id,
             case STATE_MSTR_RD_GEN_START:
                 // START condition sent?
                 if (sr1 & LL_I2C_SR1_SB) {
+                    LWL("I2C_RD_START", 2, LWL_1(st->dest_addr), LWL_1(st->msg_len));
                     // Write address with R bit (bit 0 = 1)
                     st->i2c_reg_base->DR = (st->dest_addr << 1) | 1;
                     st->state = STATE_MSTR_RD_SENDING_ADDR;
@@ -582,6 +591,7 @@ static void i2c_interrupt(enum i2c_instance_id instance_id,
             case STATE_MSTR_RD_SENDING_ADDR:
                 // Address ACKed?
                 if (sr1 & LL_I2C_SR1_ADDR) {
+                    LWL("I2C_RD_ADDR_ACK", 1, LWL_1(st->dest_addr));
                     if (st->msg_len == 1) {
                         // Single byte read: NACK it
                         LL_I2C_AcknowledgeNextData(st->i2c_reg_base, LL_I2C_NACK);
@@ -608,6 +618,7 @@ static void i2c_interrupt(enum i2c_instance_id instance_id,
                     
                     // Check if this was the last byte
                     if (st->msg_bytes_xferred >= st->msg_len) {
+                        LWL("I2C_RD_DONE", 1, LWL_1(st->msg_len));
                         op_stop_success(st, st->msg_len > 1);  // STOP already sent for single byte
                     } else if (st->msg_bytes_xferred == st->msg_len - 1) {
                         // Next byte is last: NACK it
@@ -639,6 +650,7 @@ static void i2c_interrupt(enum i2c_instance_id instance_id,
         else if (sr1 & I2C_SR1_BERR)
             i2c_error = I2C_ERR_BUS_ERR;
 
+        LWL("I2C_ERROR", 2, LWL_1(i2c_error), LWL_1(sr1));
         op_stop_fail(st, i2c_error);
     }
 }

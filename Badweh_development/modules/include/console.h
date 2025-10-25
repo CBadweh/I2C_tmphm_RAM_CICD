@@ -45,6 +45,7 @@ int32_t console_init(struct console_cfg* cfg);;
 int32_t console_run(void);
 
 // Other APIs.
+int32_t console_data_print(uint8_t* data_ptr, uint32_t num_bytes);
 int	printc(const char* fmt, ...)
     __attribute__((__format__ (__printf__, 1, 2)));
 int	vprintc(const char* fmt, va_list args);
