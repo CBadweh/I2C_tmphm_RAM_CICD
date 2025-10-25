@@ -92,7 +92,7 @@
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Core"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Drivers"/>
 						<entry flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="app1"/>
-						<entry excluding="i2c/i2c2.c" flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="modules"/>
+						<entry excluding="tmphm/tmphm_original.c|i2c/i2c2.c" flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="modules"/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
