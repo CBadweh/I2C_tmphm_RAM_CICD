@@ -1,14 +1,14 @@
 /*
- * TMPHM DRIVER - Temperature/Humidity Module (SHT31-D Sensor)
+ * SIMPLIFIED TMPHM DRIVER - For Learning the Critical Path
  * 
- * DAY 3 COMPLETE VERSION with:
- * - Console commands for testing and status
- * - Performance counters for diagnostics
- * - Comprehensive LWL (Lightweight Logging) instrumentation
- * - Full error handling
+ * This is a stripped-down version focusing on the essential state machine
+ * and sensor interaction. Non-essential features removed:
+ * - Console commands (debugging only)
+ * - Performance counters (nice to have)
+ * - Multiple instance support (focus on INSTANCE_1 only)
  * 
- * CRITICAL PATH:
- * 1. Timer triggers measurement cycle every 1 second
+ * CRITICAL PATH TO UNDERSTAND:
+ * 1. Timer triggers measurement cycle
  * 2. State machine reserves I2C bus
  * 3. Write measurement command to sensor (0x2c 0x06)
  * 4. Wait 15ms for sensor to measure
@@ -22,487 +22,321 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "cmd.h"
-#include "console.h"
 #include "i2c.h"
 #include "log.h"
 #include "lwl.h"
 #include "module.h"
 #include "tmr.h"
 #include "tmphm.h"
-#ifdef CONFIG_WDG_PRESENT
-#include "wdg.h"
-#endif
 
 ////////////////////////////////////////////////////////////////////////////////
-// State Machine
+// STATE MACHINE - The heart of the driver
 ////////////////////////////////////////////////////////////////////////////////
+
+// LWL (Lightweight Logging) configuration
+#define LWL_BASE_ID 30  // TMPHM module uses IDs 30-39
+#define LWL_NUM 10
 
 enum states {
-    STATE_IDLE,
-    STATE_RESERVE_I2C,
-    STATE_WRITE_MEAS_CMD,
-    STATE_WAIT_MEAS,
-    STATE_READ_MEAS_VALUE
+    STATE_IDLE,              // Waiting for timer to trigger
+    STATE_RESERVE_I2C,       // Acquiring I2C bus
+    STATE_WRITE_MEAS_CMD,    // Sending measurement command
+    STATE_WAIT_MEAS,         // Waiting 15ms for sensor
+    STATE_READ_MEAS_VALUE    // Reading result
 };
 
-////////////////////////////////////////////////////////////////////////////////
-// Performance Measurements
-////////////////////////////////////////////////////////////////////////////////
+// SHT31-D measurement command from datasheet Table 8:
+// 0x2C = High repeatability measurement
+// 0x06 = Clock stretching enabled
+const char sensor_i2c_cmd[2] = {0x2c, 0x06};
 
-enum tmphm_u16_pms {
-    CNT_RESERVE_FAIL,
-    CNT_WRITE_INIT_FAIL,
-    CNT_WRITE_OP_FAIL,
-    CNT_READ_INIT_FAIL,
-    CNT_READ_OP_FAIL,
-    CNT_TASK_OVERRUN,
-    CNT_CRC_FAIL,
-
-    NUM_U16_PMS
-};
+// Buffer size for sensor data:
+// Byte 0: Temperature MSB
+// Byte 1: Temperature LSB  
+// Byte 2: Temperature CRC-8
+// Byte 3: Humidity MSB
+// Byte 4: Humidity LSB
+// Byte 5: Humidity CRC-8
+#define I2C_MSG_BFR_LEN 6
 
 ////////////////////////////////////////////////////////////////////////////////
-// State Structure
+// STATE STRUCTURE - Holds all info for the sensor
 ////////////////////////////////////////////////////////////////////////////////
 
 struct tmphm_state {
-    struct tmphm_cfg cfg;              // Config (I2C instance, address, timings)
-    struct tmphm_meas last_meas;       // Last measurement
-    int32_t tmr_id;                    // Timer ID
-    uint32_t i2c_op_start_ms;          // For timing the 15ms wait
-    uint32_t last_meas_ms;             // When was last measurement?
-    uint8_t msg_bfr[6];                // 6 bytes from sensor
-    bool got_meas;                     // Have we gotten at least one?
+    struct tmphm_cfg cfg;              // Configuration
+    struct tmphm_meas last_meas;       // Last measurement result
+    
+    int32_t tmr_id;                    // Timer ID for periodic sampling
+    uint32_t i2c_op_start_ms;          // When did I2C operation start?
+    uint32_t last_meas_ms;             // When was last measurement taken?
+    
+    uint8_t msg_bfr[I2C_MSG_BFR_LEN];  // Buffer for I2C data
+    
+    bool got_meas;                     // Have we gotten at least one measurement?
     enum states state;                 // Current state
 };
 
 ////////////////////////////////////////////////////////////////////////////////
-// Private Function Declarations
+// PRIVATE FUNCTIONS
 ////////////////////////////////////////////////////////////////////////////////
 
-static enum tmr_cb_action my_callback(int32_t tmr_id, uint32_t user_data);
+static enum tmr_cb_action tmr_callback(int32_t tmr_id, uint32_t user_data);
 static uint8_t crc8(const uint8_t *data, int len);
-static int32_t cmd_tmphm_status(int32_t argc, const char** argv);
-static int32_t cmd_tmphm_test(int32_t argc, const char** argv);
 
 ////////////////////////////////////////////////////////////////////////////////
-// Private Variables
+// PRIVATE VARIABLES
 ////////////////////////////////////////////////////////////////////////////////
 
-static struct tmphm_state st;  // The actual state variable
-const char sensor_i2c_cmd[2] = {0x2c, 0x06};  // Sensor command bytes
-static int32_t log_level = LOG_INFO;
+static struct tmphm_state st;  // Single instance state
+static int32_t log_level = LOG_INFO;  // Logging level (required by log macros)
 
-// Storage for performance measurements
-static uint16_t cnts_u16[NUM_U16_PMS];
+////////////////////////////////////////////////////////////////////////////////
+// PUBLIC API FUNCTIONS
+////////////////////////////////////////////////////////////////////////////////
 
-// Names of performance measurements
-static const char* cnts_u16_names[NUM_U16_PMS] = {
-    "reserve fail",
-    "write init fail",
-    "write op fail",
-    "read init fail",
-    "read op fail",
-    "task overrun",
-    "crc error",
-};
-
-// Console command info
-static struct cmd_cmd_info cmds[] = {
-    {
-        .name = "status",
-        .func = cmd_tmphm_status,
-        .help = "Get module status, usage: tmphm status",
-    },
-    {
-        .name = "test",
-        .func = cmd_tmphm_test,
-        .help = "Run test, usage: tmphm test [<op> [<arg>]] (enter no op for help)",
-    }
-};
-
-// Data structure passed to cmd module for console interaction
-static struct cmd_client_info cmd_info = {
-    .name = "tmphm",
-    .num_cmds = ARRAY_SIZE(cmds),
-    .cmds = cmds,
-    .log_level_ptr = &log_level,
-    .num_u16_pms = NUM_U16_PMS,
-    .u16_pms = cnts_u16,
-    .u16_pm_names = cnts_u16_names,
-};
-
-
-int32_t tmphm_get_def_cfg(enum tmphm_instance_id instance_id, struct tmphm_cfg* cfg){
-
-    // Question 1: Which I2C bus are you using?
-    cfg->i2c_instance_id = CONFIG_TMPHM_1_DFLT_I2C_INSTANCE;
-
-    // Question 2: What's the sensor's I2C address? (Check SHT31-D datasheet)
-    cfg->i2c_addr = CONFIG_TMPHM_1_DFLT_I2C_ADDR;
-
-    // Question 3: How often should we take readings? (milliseconds)
-    cfg->sample_time_ms = CONFIG_TMPHM_DFLT_SAMPLE_TIME_MS;
-
-    // Question 4: How long does the sensor need to measure? (Check datasheet Table 4)
-    cfg->meas_time_ms = CONFIG_TMPHM_DFLT_MEAS_TIME_MS;
-
+/*
+ * Get default configuration
+ * This sets up the concrete values that will be used throughout the driver
+ */
+int32_t tmphm_get_def_cfg(enum tmphm_instance_id instance_id, struct tmphm_cfg* cfg)
+{
+    cfg->i2c_instance_id = I2C_INSTANCE_3;  // Use I2C bus #3 (the only one we have)
+    cfg->i2c_addr = 0x44;                   // SHT31-D sensor address (could be 0x44 or 0x45)
+    cfg->sample_time_ms = 1000;             // Take reading every 1000ms = 1 second
+    cfg->meas_time_ms = 15;                 // Sensor needs 15ms to complete measurement (from datasheet)
     return 0;
 }
 
-
-int32_t tmphm_init(enum tmphm_instance_id instance_id, struct tmphm_cfg* cfg){
-    // Question 1: What should you do with the state structure first?
-    // Hint: Start with a clean slate - zero everything
-	memset(&st, 0, sizeof(st));
-
-    // Question 2: Where do you store the configuration?
-    // Hint: You have a `cfg` field in your state structure
-	st.cfg = *cfg;
-
-    // Question 3: What should the initial state be?
-    // Hint: Are you measuring yet? No! So what state?
-	st.state = STATE_IDLE;
-
-	return 0;
+/*
+ * Initialize TMPHM
+ */
+int32_t tmphm_init(enum tmphm_instance_id instance_id, struct tmphm_cfg* cfg)
+{
+    memset(&st, 0, sizeof(st));
+    st.cfg = *cfg;
+    return 0;
 }
 
-
+/*
+ * Start TMPHM - Get timer and begin periodic sampling
+ */
 int32_t tmphm_start(enum tmphm_instance_id instance_id)
 {
-    int32_t rc;
-    
-    // Register console commands
-    rc = cmd_register(&cmd_info);
-    if (rc < 0) {
-        log_error("tmphm_start: cmd error %d\n", rc);
-        return rc;
-    }
-    
-    // Get periodic timer with callback (fires every sample_time_ms)
-    st.tmr_id = tmr_inst_get_cb(st.cfg.sample_time_ms, my_callback, 0);
-    if (st.tmr_id < 0) {
+    // Get a periodic timer that fires every sample_time_ms
+    st.tmr_id = tmr_inst_get_cb(st.cfg.sample_time_ms, tmr_callback, 0);
+    if (st.tmr_id < 0)
         return MOD_ERR_RESOURCE;
-    }
     
-    // Register TMPHM watchdog with 5-second timeout (if watchdog present)
-#ifdef CONFIG_WDG_PRESENT
-    rc = wdg_register(CONFIG_TMPHM_WDG_ID, 5000);
-    if (rc < 0) {
-        log_error("tmphm_start: wdg_register error %d\n", rc);
-        return rc;
-    }
-    log_info("tmphm_start: Registered watchdog %d with 5s timeout\n",
-             CONFIG_TMPHM_WDG_ID);
-#endif
-
     return 0;
 }
 
-
+/*
+ * Run TMPHM - THE HEART OF THE DRIVER
+ * Called repeatedly from super loop. Advances state machine.
+ */
 int32_t tmphm_run(enum tmphm_instance_id instance_id)
 {
     int32_t rc;
-    
+
     switch (st.state) {
         
+        // ------ IDLE: Waiting for timer to trigger ------
         case STATE_IDLE:
-            // Waiting for timer to trigger next measurement cycle
+            // Nothing to do - timer callback will move us to RESERVE_I2C
             break;
 
+        // ------ RESERVE: Get exclusive I2C access ------
         case STATE_RESERVE_I2C:
-            LWL("TMPHM: Attempting I2C reserve", 0);
-            
-            rc = i2c_reserve(st.cfg.i2c_instance_id);
-            if (rc == 0) {
-                // Reserve succeeded - prepare and send measurement command
-                memcpy(st.msg_bfr, sensor_i2c_cmd, sizeof(sensor_i2c_cmd));
-                rc = i2c_write(st.cfg.i2c_instance_id, st.cfg.i2c_addr, st.msg_bfr, 2);
-                if (rc == 0) {
-                    LWL("TMPHM: Write started", 0);
+            // Reserve I2C bus (st.cfg.i2c_instance_id = I2C_INSTANCE_3 = bus #3)
+            rc = i2c_reserve(st.cfg.i2c_instance_id);  // i2c_reserve(3)
+            if (rc == 0) {  // 0 = success
+                LWL("TMPHM_RESERVED", 1, LWL_1(st.cfg.i2c_instance_id));
+                // Got the bus! Send measurement command
+                // Copy command bytes: {0x2c, 0x06} to buffer
+                memcpy(st.msg_bfr, sensor_i2c_cmd, sizeof(sensor_i2c_cmd));  // 2 bytes
+                
+                // Write to sensor (bus=3, addr=0x44, data={0x2c,0x06}, len=2)
+                rc = i2c_write(st.cfg.i2c_instance_id,  // bus 3
+                              st.cfg.i2c_addr,           // 0x44
+                              st.msg_bfr,                // {0x2c, 0x06}
+                              sizeof(sensor_i2c_cmd));   // 2 bytes
+                if (rc == 0) {  // 0 = success
+                    LWL("TMPHM_WR_CMD", 2, LWL_1(st.cfg.i2c_addr), LWL_1(sizeof(sensor_i2c_cmd)));
                     st.state = STATE_WRITE_MEAS_CMD;
                 } else {
-                    LWL("TMPHM: Write init failed rc=%d", 4, LWL_4(rc));
-                    INC_SAT_U16(cnts_u16[CNT_WRITE_INIT_FAIL]);
-                    i2c_release(st.cfg.i2c_instance_id);
+                    // Write failed, release and go back to IDLE
+                    i2c_release(st.cfg.i2c_instance_id);  // i2c_release(3)
                     st.state = STATE_IDLE;
                 }
-            } else {
-                LWL("TMPHM: Reserve failed rc=%d", 4, LWL_4(rc));
-                INC_SAT_U16(cnts_u16[CNT_RESERVE_FAIL]);
-                // Stay in RESERVE state, will retry next time through loop
             }
+            // If reserve failed, stay in RESERVE state and try again next loop
             break;
 
+        // ------ WRITE: Waiting for write to complete ------
         case STATE_WRITE_MEAS_CMD:
-            // Poll for write operation completion
-            rc = i2c_get_op_status(st.cfg.i2c_instance_id);
-            if (rc != MOD_ERR_OP_IN_PROG) {
-                if (rc == 0) {
-                    // Write succeeded - start timing for sensor measurement
-                    LWL("TMPHM: Write complete, waiting for sensor", 0);
-                    st.i2c_op_start_ms = tmr_get_ms();
+            // Check write status (on bus 3)
+            rc = i2c_get_op_status(st.cfg.i2c_instance_id);  // i2c_get_op_status(3)
+            if (rc != MOD_ERR_OP_IN_PROG) {  // MOD_ERR_OP_IN_PROG = -4 (still working)
+                // Write complete!
+                if (rc == 0) {  // 0 = success
+                    // Success - start waiting for sensor measurement
+                    LWL("TMPHM_WR_OK", 0);
+                    st.i2c_op_start_ms = tmr_get_ms();  // Record current time
                     st.state = STATE_WAIT_MEAS;
                 } else {
-                    LWL("TMPHM: Write op failed rc=%d", 4, LWL_4(rc));
-                    INC_SAT_U16(cnts_u16[CNT_WRITE_OP_FAIL]);
-                    i2c_release(st.cfg.i2c_instance_id);
+                    // Write failed, release and go back to IDLE
+                    i2c_release(st.cfg.i2c_instance_id);  // i2c_release(3)
                     st.state = STATE_IDLE;
                 }
             }
+            // Still in progress? Just wait
             break;
 
+        // ------ WAIT: Sensor is measuring, wait 15ms ------
         case STATE_WAIT_MEAS:
-            // Wait for sensor to complete measurement (17ms typ)
-            if (tmr_get_ms() - st.i2c_op_start_ms >= st.cfg.meas_time_ms) {
-                LWL("TMPHM: Wait complete, starting read", 0);
-                rc = i2c_read(st.cfg.i2c_instance_id, st.cfg.i2c_addr, st.msg_bfr, 6);
-                if (rc == 0) {
+            // Has enough time passed? (st.cfg.meas_time_ms = 15)
+            if (tmr_get_ms() - st.i2c_op_start_ms >= st.cfg.meas_time_ms) {  // >= 15ms?
+                // 15ms has elapsed, read the result
+                LWL("TMPHM_RD_START", 1, LWL_1(I2C_MSG_BFR_LEN));
+                // Read 6 bytes from sensor (bus=3, addr=0x44, len=6)
+                rc = i2c_read(st.cfg.i2c_instance_id,  // bus 3
+                             st.cfg.i2c_addr,           // 0x44
+                             st.msg_bfr,                // store in buffer
+                             I2C_MSG_BFR_LEN);          // 6 bytes
+                if (rc == 0) {  // 0 = success
                     st.state = STATE_READ_MEAS_VALUE;
                 } else {
-                    LWL("TMPHM: Read init failed rc=%d", 4, LWL_4(rc));
-                    INC_SAT_U16(cnts_u16[CNT_READ_INIT_FAIL]);
-                    i2c_release(st.cfg.i2c_instance_id);
+                    // Read start failed, release and go back to IDLE
+                    i2c_release(st.cfg.i2c_instance_id);  // i2c_release(3)
                     st.state = STATE_IDLE;
                 }
             }
             break;
 
+        // ------ READ: Waiting for read to complete ------
         case STATE_READ_MEAS_VALUE:
-            // Poll for read operation completion
-            rc = i2c_get_op_status(st.cfg.i2c_instance_id);
-            if (rc != MOD_ERR_OP_IN_PROG) {
-                if (rc == 0) {
-                    // Read succeeded - validate and process data
-                    uint8_t* msg = st.msg_bfr;
+            // Check read status (on bus 3)
+            rc = i2c_get_op_status(st.cfg.i2c_instance_id);  // i2c_get_op_status(3)
+            if (rc != MOD_ERR_OP_IN_PROG) {  // MOD_ERR_OP_IN_PROG = -4
+                // Read complete!
+                if (rc == 0) {  // 0 = success
+                    // SUCCESS! Validate CRC and convert data
+                    uint8_t* msg = st.msg_bfr;  // msg[0..5] = 6 bytes from sensor
                     
-                    if (crc8(&msg[0], 2) != msg[2] || crc8(&msg[3], 2) != msg[5]) {
-                        // CRC validation failed
-                        LWL("TMPHM: CRC error", 0);
-                        INC_SAT_U16(cnts_u16[CNT_CRC_FAIL]);
-                    } else {
-                        // CRC valid - convert raw data to temperature/humidity
-                        const uint32_t divisor = 65535;
-                        int32_t temp = (msg[0] << 8) + msg[1];
-                        uint32_t hum = (msg[3] << 8) + msg[4];
+                    // Validate CRC-8 for temperature and humidity
+                    // msg[0,1] = temp raw (MSB, LSB), msg[2] = temp CRC
+                    // msg[3,4] = hum raw (MSB, LSB),  msg[5] = hum CRC
+                    if (crc8(&msg[0], 2) == msg[2] &&    // temp CRC valid?
+                        crc8(&msg[3], 2) == msg[5]) {    // hum CRC valid?
                         
-                        // Apply conversion formulas (datasheet pg 14)
+                        // CRC valid - convert raw data to temperature/humidity
+                        const uint32_t divisor = 65535;  // 2^16 - 1
+                        
+                        // Combine MSB and LSB to get 16-bit raw value (0x0000 to 0xFFFF)
+                        int32_t temp = (msg[0] << 8) + msg[1];  // 16-bit raw temp
+                        uint32_t hum = (msg[3] << 8) + msg[4];  // 16-bit raw humidity
+                        
+                        // Temperature formula from datasheet: T[°C] = -45 + 175 × (raw/65535)
+                        // Stored as ×10 for integer math: -450 + 1750 × (raw/65535)
+                        // Example: raw=32768 (mid-range) → -450 + 1750×0.5 = 425 = 42.5°C
                         temp = -450 + (1750 * temp + divisor/2) / divisor;
+                        
+                        // Humidity formula from datasheet: H[%] = 100 × (raw/65535)
+                        // Stored as ×10 for integer math: 1000 × (raw/65535)
+                        // Example: raw=32768 (mid-range) → 1000×0.5 = 500 = 50.0%
                         hum = (1000 * hum + divisor/2) / divisor;
                         
-                        // Store measurement
-                        st.last_meas.temp_deg_c_x10 = temp;
-                        st.last_meas.rh_percent_x10 = hum;
+                        // Store result (temp and hum are now in units of ×10)
+                        st.last_meas.temp_deg_c_x10 = temp;  // e.g., 235 = 23.5°C
+                        st.last_meas.rh_percent_x10 = hum;   // e.g., 450 = 45.0%
                         st.last_meas_ms = tmr_get_ms();
                         st.got_meas = true;
                         
-                        LWL("TMPHM: Got good measurement temp=%d hum=%d", 4, 
-                            LWL_2(temp), LWL_2(hum));
-                        
-                        // Feed watchdog after successful measurement
-#ifdef CONFIG_WDG_PRESENT
-                        wdg_feed(CONFIG_TMPHM_WDG_ID);
-#endif
+                        LWL("TMPHM_MEAS", 4, LWL_2(temp), LWL_2(hum));
+                        // Print result (e.g., "temp=235 degC*10 hum=450 %*10")
+                        log_info("temp=%ld degC*10 hum=%lu %%*10\n", temp, hum);
+                    } else {
+                        // CRC failed - ignore this measurement
+                        LWL("TMPHM_CRC_ERR", 0);
+                        log_error("CRC error\n");
                     }
-                    // Always release I2C after read completes
-                    i2c_release(st.cfg.i2c_instance_id);
-                    st.state = STATE_IDLE;
-                } else {
-                    LWL("TMPHM: Read op failed rc=%d", 4, LWL_4(rc));
-                    INC_SAT_U16(cnts_u16[CNT_READ_OP_FAIL]);
-                    i2c_release(st.cfg.i2c_instance_id);
-                    st.state = STATE_IDLE;
                 }
+                // Read complete (success or fail), release I2C and go to IDLE
+                i2c_release(st.cfg.i2c_instance_id);  // i2c_release(3)
+                st.state = STATE_IDLE;
             }
+            // Still in progress? Just wait
             break;
     }
-    
     return 0;
 }
 
+/*
+ * Get last measurement
+ */
 int32_t tmphm_get_last_meas(enum tmphm_instance_id instance_id,
                             struct tmphm_meas* meas, uint32_t* meas_age_ms)
 {
-    // Validate parameter
-    if (meas == NULL) {
+    if (meas == NULL)
         return MOD_ERR_ARG;
-    }
+    
+    if (!st.got_meas)
+        return MOD_ERR_UNAVAIL;  // No measurement yet
 
-    // Check if we have data
-    if (!st.got_meas) {
-        return MOD_ERR_UNAVAIL;
-    }
-
-    // Copy measurement to caller
     *meas = st.last_meas;
-
-    // Calculate age (optional parameter)
-    if (meas_age_ms != NULL) {
+    if (meas_age_ms != NULL)
         *meas_age_ms = tmr_get_ms() - st.last_meas_ms;
-    }
 
     return 0;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// Timer Callback - Triggers measurement cycle
+// PRIVATE FUNCTIONS
 ////////////////////////////////////////////////////////////////////////////////
 
-static enum tmr_cb_action my_callback(int32_t tmr_id, uint32_t user_data)
+/*
+ * Timer callback - Triggers new measurement cycle
+ * Called by timer module every 1000ms (1 second)
+ * 
+ * This is the "heartbeat" that kicks off each measurement cycle.
+ * It just changes the state - the actual work happens in tmphm_run()
+ */
+static enum tmr_cb_action tmr_callback(int32_t tmr_id, uint32_t user_data)
 {
+    // If IDLE, start a new measurement cycle
     if (st.state == STATE_IDLE) {
-        // Start new measurement cycle
-        LWL("TMPHM: Start measurement cycle", 0);
-        st.state = STATE_RESERVE_I2C;
-    } else {
-        // Timer overrun - previous measurement still in progress
-        LWL("TMPHM: Timer overrun state=%d", 1, LWL_1(st.state));
-        INC_SAT_U16(cnts_u16[CNT_TASK_OVERRUN]);
-    }
-
-    return TMR_CB_RESTART;  // Fire again next cycle
-}
-
-////////////////////////////////////////////////////////////////////////////////
-// Console Command Functions
-////////////////////////////////////////////////////////////////////////////////
-
-/*
- * @brief Console command function for "tmphm status".
- *
- * @param[in] argc Number of arguments, including "tmphm"
- * @param[in] argv Argument values, including "tmphm"
- *
- * @return 0 for success, else a "MOD_ERR" value. See code for details.
- *
- * Command usage: tmphm status
- */
-static int32_t cmd_tmphm_status(int32_t argc, const char** argv)
-{
-    printc("         Got  Last Last Meas Meas\n"
-           "ID State Meas Temp Hum  Age  Time\n"
-           "-- ----- ---- ---- ---- ---- ----\n");
+        LWL("TMPHM_TMR_TRIG", 0);
+        st.state = STATE_RESERVE_I2C;  // Move to next state, tmphm_run() will handle it
+    } else
+        // State != IDLE means previous measurement still in progress!
+        // This shouldn't happen if timing is correct (measurement takes ~20ms, timer is 1000ms)
+        log_error("Timer overrun - previous measurement not done!\n");
     
-    printc("%2d %5d %4d %4d %4u %4lu %4lu\n",
-           0,  // instance_id (only have 1)
-           st.state,
-           st.got_meas,
-           st.last_meas.temp_deg_c_x10,
-           st.last_meas.rh_percent_x10,
-           st.got_meas ? (tmr_get_ms() - st.last_meas_ms) : 0,
-           st.cfg.meas_time_ms);
-    
-    return 0;
+    return TMR_CB_RESTART;  // Keep timer running (fire again in 1000ms)
 }
 
 /*
- * @brief Console command function for "tmphm test".
- *
- * @param[in] argc Number of arguments, including "tmphm"
- * @param[in] argv Argument values, including "tmphm"
- *
- * @return 0 for success, else a "MOD_ERR" value. See code for details.
- *
- * Command usage: tmphm test [<op> [<arg>]]
+ * CRC-8 calculation for data validation
+ * 
+ * Parameters from SHT31-D datasheet page 14:
+ * - Polynomial: x^8 + x^5 + x^4 + 1 (0x31)
+ * - Initialization: 0xFF
+ * - Final XOR: 0x00 (none)
+ * - Example: 0xBEEF => 0x92
  */
-static int32_t cmd_tmphm_test(int32_t argc, const char** argv)
-{
-    struct cmd_arg_val arg_vals[4];
-    int32_t rc;
-    uint32_t idx;
-    enum tmphm_instance_id instance_id = TMPHM_INSTANCE_1;
-
-    // Handle help case
-    if (argc == 2) {
-        printc("Test operations and param(s) are as follows:\n"
-               "  Get last meas, usage: tmphm test lastmeas <instance-id>\n"
-               "  Set meas time, usage: tmphm test meastime <instance-id> <time-ms>\n"
-               "  Test crc8, usage: tmphm test crc8 byte1 ... (up to 4 bytes)\n");
-        return 0;
-    }
-
-    if (argc < 3) {
-        return MOD_ERR_BAD_CMD;
-    }
-
-    // Get instance ID (except for crc8 option)
-    if (strcasecmp(argv[2], "crc8") != 0) {
-        rc = cmd_parse_args(argc-3, argv+3, "u+", arg_vals);
-        if (rc < 1)
-            return MOD_ERR_BAD_CMD;
-        instance_id = (enum tmphm_instance_id)arg_vals[0].val.u;
-        if (instance_id >= TMPHM_NUM_INSTANCES) {
-            printc("Bad instance\n");
-            return MOD_ERR_BAD_INSTANCE;
-        }
-    }
-
-    if (strcasecmp(argv[2], "lastmeas") == 0) {
-        struct tmphm_meas meas;
-        uint32_t meas_age_ms;
-        rc = tmphm_get_last_meas(instance_id, &meas, &meas_age_ms);
-        if (rc == 0)
-            printc("Temp=%d.%d C Hum=%u.%u %% age=%lu ms\n",
-                   meas.temp_deg_c_x10 / 10,
-                   meas.temp_deg_c_x10 % 10,
-                   meas.rh_percent_x10 / 10,
-                   meas.rh_percent_x10 % 10,
-                   meas_age_ms);
-        else
-            printc("tmphm_get_last_meas fails rc=%ld\n", rc);
-    } else if (strcasecmp(argv[2], "meastime") == 0) {
-        rc = cmd_parse_args(argc-4, argv+4, "u", arg_vals);
-        if (rc != 1) {
-            return MOD_ERR_BAD_CMD;
-        }
-        st.cfg.meas_time_ms = arg_vals[0].val.u;
-        printc("Meas time set to %lu ms\n", st.cfg.meas_time_ms);
-    } else if (strcasecmp(argv[2], "crc8") == 0) {
-        uint8_t data[4];
-
-        rc = cmd_parse_args(argc-3, argv+3, "u[u[u[u]]]", arg_vals);
-        if (rc < 1) {
-            return MOD_ERR_BAD_CMD;
-        }
-        for (idx = 0; idx < 4 && idx < rc; idx++)
-            data[idx] = (uint8_t)arg_vals[idx].val.u;
-
-        printc("crc8: 0x%02x\n", crc8(data, rc));
-    } else {
-        printc("Invalid operation '%s'\n", argv[2]);
-        return MOD_ERR_BAD_CMD;
-    }
-    
-    return 0;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-// CRC-8 Calculation
-////////////////////////////////////////////////////////////////////////////////
-
 static uint8_t crc8(const uint8_t *data, int len)
 {
-    //
-    // Parameters comes from page 14 of the STH31-D datasheet (see @ref).
-    // - Polynomial: x^8 + x^5 + x^4 + x^0 which is 100110001 binary, or 0x31 in
-    //   "normal" representation
-    // - Initialization: 0xff.
-    // - Final XOR: 0x00 (i.e. none).
-    // - Example: 0xbeef => 0x92.
-    //
     const uint8_t polynomial = 0x31;
     uint8_t crc = 0xff;
-    uint32_t idx1;
-    uint32_t idx2;
+    uint32_t idx1, idx2;
 
-    for (idx1 = len; idx1 > 0; idx1--)
-    {
+    for (idx1 = len; idx1 > 0; idx1--) {
         crc ^= *data++;
-        for (idx2 = 8; idx2 > 0; idx2--)
-        {
+        for (idx2 = 8; idx2 > 0; idx2--) {
             crc = (crc & 0x80) ? (crc << 1) ^ polynomial : (crc << 1);
         }
     }
     return crc;
 }
+

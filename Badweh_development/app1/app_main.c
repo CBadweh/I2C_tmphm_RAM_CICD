@@ -1,5 +1,5 @@
 /*
- * @brief Main application file - Day 3: TMPHM Integration
+ * @brief Main application file
  *
  * This file is the main application file that initializes and starts the various
  * modules and then runs the super loop.
@@ -27,54 +27,79 @@
  * SOFTWARE.
  */
 
-#include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 
+#include "blinky.h"
+#include "cmd.h"
 #include "console.h"
 #include "dio.h"
+#include "gps_gtu7.h"
 #include "i2c.h"
+#include "log.h"
 #include "lwl.h"
+#include "mem.h"
 #include "module.h"
 #include "tmphm.h"
 #include "ttys.h"
+#include "stat.h"
 #include "tmr.h"
-
-////////////////////////////////////////////////////////////////////////////////
-// OPERATING MODE SELECTION
-////////////////////////////////////////////////////////////////////////////////
-//
-// This application supports TWO mutually exclusive modes:
-//
-// MODE A: TMPHM Automatic Sensor Sampling (Day 3 - Production Mode)
-//   - Temperature/humidity sensor runs in background
-//   - Samples every 1 second automatically via timer
-//   - Use console commands to query: "tmphm test lastmeas 0"
-//   - CURRENTLY ENABLED (default for Day 3)
-//
-// MODE B: Manual I2C Button Test (Day 2 - Debug Mode)
-//   - Press USER button to trigger I2C test sequence
-//   - Manually tests I2C driver functionality
-//   - CURRENTLY DISABLED (for Day 3)
-//
-// WHY MUTUALLY EXCLUSIVE? Both use the same I2C bus (I2C_INSTANCE_3).
-// Running both simultaneously would require sophisticated arbitration.
-// For learning, we run one at a time.
-//
-// TO SWITCH MODES:
-//   1. Find the "MODE A" and "MODE B" sections below
-//   2. Comment out one mode, uncomment the other
-//   3. Rebuild with: ci-cd-tools/build.bat
-//
-////////////////////////////////////////////////////////////////////////////////
-
-// Set this to 1 for MODE A (TMPHM), 0 for MODE B (Button Test)
-#define ENABLE_MODE_A_TMPHM 1
 
 ////////////////////////////////////////////////////////////////////////////////
 // Common macros
 ////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////////
+// Type definitions
+////////////////////////////////////////////////////////////////////////////////
+
+enum main_u16_pms {
+    CNT_INIT_ERR,
+    CNT_START_ERR,
+    CNT_RUN_ERR,
+
+    NUM_U16_PMS
+};
+
+////////////////////////////////////////////////////////////////////////////////
+// Private (static) function declarations
+////////////////////////////////////////////////////////////////////////////////
+
+static int32_t cmd_main_status();
+
+////////////////////////////////////////////////////////////////////////////////
+// Private (static) variables
+////////////////////////////////////////////////////////////////////////////////
+
+static int32_t log_level = LOG_DEFAULT;
+
+static struct cmd_cmd_info cmds[] = {
+    {
+        .name = "status",
+        .func = cmd_main_status,
+        .help = "Get main status, usage: main status [clear]",
+    },
+};
+
+static uint16_t cnts_u16[NUM_U16_PMS];
+
+static const char* cnts_u16_names[NUM_U16_PMS] = {
+    "init err",
+    "start err",
+    "run err",
+};
+
+static struct cmd_client_info cmd_info = {
+    .name = "main",
+    .num_cmds = ARRAY_SIZE(cmds),
+    .cmds = cmds,
+    .log_level_ptr = &log_level,
+    .num_u16_pms = NUM_U16_PMS,
+    .u16_pms = cnts_u16,
+    .u16_pm_names = cnts_u16_names,
+};
+
 
 // Config info for dio module. These variables must be static since the dio
 // module holds a pointer to them.
@@ -130,15 +155,15 @@ static struct dio_cfg dio_cfg = {
     .outputs = d_outputs,
 };
 
+static struct stat_dur stat_loop_dur;
+
 ////////////////////////////////////////////////////////////////////////////////
 // Public (global) variables and externs
 ////////////////////////////////////////////////////////////////////////////////
 
-// Button debouncing for I2C auto test trigger (MODE B only)
-#if !ENABLE_MODE_A_TMPHM
+// Button debouncing for I2C auto test trigger
 static bool button_was_pressed = false;
 static bool test_completed = false;
-#endif
 
 ////////////////////////////////////////////////////////////////////////////////
 // Public (global) functions
@@ -146,116 +171,217 @@ static bool test_completed = false;
 
 void app_main(void)
 {
+    int32_t result;;
     struct console_cfg console_cfg;
+//    struct gps_cfg gps_cfg;
     struct i2c_cfg i2c_cfg;
-    struct tmr_cfg tmr_cfg;
     struct ttys_cfg ttys_cfg;
-    
-#if ENABLE_MODE_A_TMPHM
+//    struct blinky_cfg blinky_cfg = {
+//        .dout_idx = DOUT_LED_2,
+//        .code_num_blinks = 5,
+//        .code_period_ms = 1000,
+//        .sep_num_blinks = 5,
+//        .sep_period_ms = 200,
+//    };
     struct tmphm_cfg tmphm_cfg;
-#endif
 
     //
     // Invoke the init API on modules the use it.
     //
 
     setvbuf(stdout, NULL, _IONBF, 0);
-    printc("\n========================================\n");
-    printc("  DAY 3: TMPHM Module Integration\n");
-    printc("========================================\n");
-    
-#if ENABLE_MODE_A_TMPHM
-    printc("\nMODE: TMPHM Automatic Sensor Sampling\n");
-    printc("      (Background operation, 1 sec cycle)\n");
-    printc("      Query with: tmphm test lastmeas 0\n");
-#else
-    printc("\nMODE: Manual I2C Button Test\n");
-    printc("      (Press USER button to test)\n");
-#endif
-    
-    // ===== INIT PHASE: Configure and initialize modules =====
-    printc("\n[INIT] Initializing modules...\n");
-    
-    // Lightweight logging (for production diagnostics)
-    // Note: LWL has no init function, just start
-    
-    // Timer module (required for guard timers and TMPHM timing)
-    memset(&tmr_cfg, 0, sizeof(tmr_cfg));
-    tmr_init(&tmr_cfg);
+    printc("\nInit: Init modules\n");
+    result = ttys_get_def_cfg(TTYS_INSTANCE_UART2, &ttys_cfg);
+    if (result < 0) {
+        log_error("ttys_get_def_cfg error %d\n", result);
+        INC_SAT_U16(cnts_u16[CNT_INIT_ERR]);
+    } else {
+        result = ttys_init(TTYS_INSTANCE_UART2, &ttys_cfg);
+        if (result < 0) {
+            log_error("ttys_init UART2 error %d\n", result);
+            INC_SAT_U16(cnts_u16[CNT_INIT_ERR]);
+        }
+    }
 
-    // Serial UART (for console communication)
-    ttys_get_def_cfg(TTYS_INSTANCE_UART2, &ttys_cfg);
-    ttys_init(TTYS_INSTANCE_UART2, &ttys_cfg);
-    
-    // Console (user interface)
-    console_get_def_cfg(&console_cfg);
-    console_init(&console_cfg);
-    
-    // Digital I/O (for button test in MODE B)
-    dio_init(&dio_cfg);
-    
-    // I2C Driver (Day 2 - foundation for sensor communication)
-    i2c_get_def_cfg(I2C_INSTANCE_3, &i2c_cfg);
-    i2c_init(I2C_INSTANCE_3, &i2c_cfg);
-    
-    // ========== MODE A: TMPHM Module ==========
-#if ENABLE_MODE_A_TMPHM
-    tmphm_get_def_cfg(TMPHM_INSTANCE_1, &tmphm_cfg);
-    tmphm_init(TMPHM_INSTANCE_1, &tmphm_cfg);
-    printc("  - TMPHM (Temp/Humidity) initialized\n");
-#endif
+    result = ttys_get_def_cfg(TTYS_INSTANCE_UART6, &ttys_cfg);
+    if (result < 0) {
+        log_error("ttys_get_def_cfg error %d\n", result);
+        INC_SAT_U16(cnts_u16[CNT_INIT_ERR]);
+    } else {
+        result = ttys_init(TTYS_INSTANCE_UART6, &ttys_cfg);
+        if (result < 0) {
+            log_error("ttys_init UART6 error %d\n", result);
+            INC_SAT_U16(cnts_u16[CNT_INIT_ERR]);
+        }
+    }
 
-    // ===== START PHASE: Enable modules for operation =====
-    printc("\n[START] Starting modules...\n");
-    
-    // Lightweight logging (Day 3 - production diagnostics with LWL)
-    lwl_start();
-    lwl_enable(true);  // Enable LWL recording
-    printc("  - LWL (Lightweight Logging) started\n");
-    
-    // Timer module
-    tmr_start();
+    result = cmd_init(NULL);
+    if (result < 0) {
+        log_error("cmd_init error %d\n", result);
+        INC_SAT_U16(cnts_u16[CNT_INIT_ERR]);
+    }
 
-    // Serial UART
-    ttys_start(TTYS_INSTANCE_UART2);
-    
-    // Digital I/O
-    dio_start();
-    
-    // I2C Driver (enables interrupts, gets guard timer)
-    i2c_start(I2C_INSTANCE_3);
-    
-    // ========== MODE A: TMPHM Module ==========
-#if ENABLE_MODE_A_TMPHM
-    tmphm_start(TMPHM_INSTANCE_1);
-    printc("  - TMPHM started (1-sec sampling)\n");
-#endif
+    result = console_get_def_cfg(&console_cfg);
+    if (result < 0) {
+        log_error("console_get_def_cfg error %d\n", result);
+        INC_SAT_U16(cnts_u16[CNT_INIT_ERR]);
+    } else {
+        result = console_init(&console_cfg);
+        if (result < 0) {
+            log_error("console_init error %d\n", result);
+            INC_SAT_U16(cnts_u16[CNT_INIT_ERR]);
+        }
+    }
 
-    // ===== SUPER LOOP: Run modules continuously =====
-    printc("\n[READY] Entering super loop...\n");
-    
-#if ENABLE_MODE_A_TMPHM
-    printc("TMPHM running in background.\n");
-    printc("Console commands available:\n");
-    printc("  - tmphm status\n");
-    printc("  - tmphm test lastmeas 0\n");
-    printc("  - i2c status\n\n");
-#else
-    printc("Press USER button to run I2C auto test.\n\n");
-#endif
+    result = tmr_init(NULL);
+    if (result < 0) {
+        log_error("tmr_init error %d\n", result);
+        INC_SAT_U16(cnts_u16[CNT_INIT_ERR]);
+    }
+
+    result = dio_init(&dio_cfg);
+    if (result < 0) {
+        log_error("dio_init error %d\n", result);
+        INC_SAT_U16(cnts_u16[CNT_INIT_ERR]);
+    }
+
+//    result = gps_get_def_cfg(&gps_cfg);
+//    if (result < 0) {
+//        log_error("gps_get_def_cfg error %d\n", result);
+//        INC_SAT_U16(cnts_u16[CNT_INIT_ERR]);
+//    } else {
+//        result = gps_init(&gps_cfg);
+//        if (result < 0) {
+//            log_error("gps_init error %d\n", result);
+//            INC_SAT_U16(cnts_u16[CNT_INIT_ERR]);
+//        }
+//    }
+
+//    result = blinky_init(&blinky_cfg);
+//    if (result < 0) {
+//        log_error("blinky_init error %d\n", result);
+//        INC_SAT_U16(cnts_u16[CNT_INIT_ERR]);
+//    }
+
+    result = i2c_get_def_cfg(I2C_INSTANCE_3, &i2c_cfg);
+    if (result < 0) {
+        log_error("i2c_get_def_cfg error %d\n", result);
+        INC_SAT_U16(cnts_u16[CNT_INIT_ERR]);
+    } else {
+        result = i2c_init(I2C_INSTANCE_3, &i2c_cfg);
+        if (result < 0) {
+            log_error("i2c_init error %d\n", result);
+            INC_SAT_U16(cnts_u16[CNT_INIT_ERR]);
+        }
+    }
+
+    result = tmphm_get_def_cfg(TMPHM_INSTANCE_1, &tmphm_cfg);
+    if (result < 0) {
+        log_error("tmphm_get_def_cfg error %d\n", result);
+        INC_SAT_U16(cnts_u16[CNT_INIT_ERR]);
+    } else {
+        tmphm_cfg.i2c_instance_id = I2C_INSTANCE_3;
+        result = tmphm_init(TMPHM_INSTANCE_1, &tmphm_cfg);
+        if (result < 0) {
+            log_error("tmphm_init error %d\n", result);
+            INC_SAT_U16(cnts_u16[CNT_INIT_ERR]);
+        }
+    }
+
+    //
+    // Invoke the start API on modules the use it.
+    //
+
+    printc("Init: Start modules\n");
+
+    result = ttys_start(TTYS_INSTANCE_UART2);
+    if (result < 0) {
+        log_error("ttys_start UART2 error %d\n", result);
+        INC_SAT_U16(cnts_u16[CNT_START_ERR]);
+    }
+
+    result = ttys_start(TTYS_INSTANCE_UART6);
+    if (result < 0) {
+        log_error("ttys_start UART6 error %d\n", result);
+        INC_SAT_U16(cnts_u16[CNT_START_ERR]);
+    }
+
+    result = tmr_start();
+    if (result < 0) {
+        log_error("tmr_start error %d\n", result);
+        INC_SAT_U16(cnts_u16[CNT_START_ERR]);
+    }
+
+    result = dio_start();
+    if (result < 0) {
+        log_error("dio_start error %d\n", result);
+        INC_SAT_U16(cnts_u16[CNT_START_ERR]);
+    }
+
+    result = gps_start();
+    if (result < 0) {
+        log_error("gps_start error %d\n", result);
+        INC_SAT_U16(cnts_u16[CNT_START_ERR]);
+    }
+
+    result = mem_start();
+    if (result < 0) {
+        log_error("mem_start error %d\n", result);
+        INC_SAT_U16(cnts_u16[CNT_START_ERR]);
+    }
+
+    result = i2c_start(I2C_INSTANCE_3);
+    if (result < 0) {
+        log_error("i2c_start 3 error %d\n", result);
+        INC_SAT_U16(cnts_u16[CNT_START_ERR]);
+    }
+
+    result = tmphm_start(TMPHM_INSTANCE_1);
+    if (result < 0) {
+        log_error("tmphm_start 1 error %d\n", result);
+        INC_SAT_U16(cnts_u16[CNT_START_ERR]);
+    }
+
+    result = lwl_start();
+    if (result < 0) {
+        log_error("lwl_start error %d\n", result);
+        INC_SAT_U16(cnts_u16[CNT_START_ERR]);
+    }
+
+    // Enable LWL recording
+    lwl_enable(true);
+
+    result = cmd_register(&cmd_info);
+    if (result < 0) {
+        log_error("main: cmd_register error %d\n", result);
+        INC_SAT_U16(cnts_u16[CNT_START_ERR]);
+    }
+
+    stat_dur_init(&stat_loop_dur);
+
+    //
+    // In the super loop invoke the run API on modules the use it.
+    //
+
+    printc("Init: Enter super loop\n");
 
     while (1)
     {
-        // Console - Handle user commands (always active)
-        console_run();
-        tmr_run();
+        stat_dur_restart(&stat_loop_dur);
 
-        // ========== MODE A: TMPHM Automatic Sampling ==========
-#if ENABLE_MODE_A_TMPHM
-        tmphm_run(TMPHM_INSTANCE_1);
-        
-        // ========== MODE B: Manual I2C Button Test ==========
-#else
+        result = console_run();
+        if (result < 0)
+            INC_SAT_U16(cnts_u16[CNT_RUN_ERR]);
+
+
+        result = tmr_run();
+        if (result < 0)
+            INC_SAT_U16(cnts_u16[CNT_RUN_ERR]);
+
+        result = tmphm_run(TMPHM_INSTANCE_1);
+        if (result < 0)
+            INC_SAT_U16(cnts_u16[CNT_RUN_ERR]);
+
         // Button polling for I2C auto test trigger
         int32_t button_state = dio_get(DIN_BUTTON_1);
         if (button_state > 0) {  // Button pressed (active low on this board)
@@ -277,6 +403,49 @@ void app_main(void)
             button_was_pressed = false;
             test_completed = false;
         }
-#endif
     }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Private (static) functions
+////////////////////////////////////////////////////////////////////////////////
+
+/*
+ * @brief Console command function for "main status".
+ *
+ * @param[in] argc Number of arguments, including "main"
+ * @param[in] argv Argument values, including "main"
+ *
+ * @return 0 for success, else a "MOD_ERR" value. See code for details.
+ *
+ * Command usage: main status [clear]
+ */
+static int32_t cmd_main_status(int32_t argc, const char** argv)
+{
+    bool clear = false;
+    bool bad_arg = false;
+
+    if (argc == 3) {
+        if (strcasecmp(argv[2], "clear") == 0)
+            clear = true;
+        else
+            bad_arg = true;
+    } else if (argc > 3) {
+        bad_arg = true;
+    }
+
+    if (bad_arg) {
+        printc("Invalid arguments\n");
+        return MOD_ERR_ARG;
+    }
+
+    printc("Super loop samples=%lu min=%lu ms, max=%lu ms, avg=%lu us\n",
+           stat_loop_dur.samples, stat_loop_dur.min, stat_loop_dur.max,
+           stat_dur_avg_us(&stat_loop_dur));
+
+    if (clear) {
+        printc("Clearing loop stat\n");
+        stat_dur_init(&stat_loop_dur);
+    }
+    return 0;
 }
