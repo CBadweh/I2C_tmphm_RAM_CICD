@@ -31,20 +31,23 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "blinky.h"
-#include "cmd.h"
-#include "console.h"
-#include "dio.h"
-#include "gps_gtu7.h"
-#include "i2c.h"
-#include "log.h"
-#include "lwl.h"
-#include "mem.h"
-#include "module.h"
-#include "tmphm.h"
-#include "ttys.h"
-#include "stat.h"
-#include "tmr.h"
+// Day 3 Essential Modules Only
+#include "cmd.h"         // Console command infrastructure
+#include "console.h"     // User interaction
+#include "dio.h"         // Button input
+#include "i2c.h"         // I2C bus driver (Day 2)
+#include "lwl.h"         // Lightweight logging (Day 3 afternoon)
+#include "tmphm.h"       // Temperature/Humidity module (Day 3 - YOU'RE BUILDING THIS!)
+#include "tmr.h"         // Timer for periodic sampling
+#include "ttys.h"        // Serial UART
+#include "module.h"      // Module framework
+#include "stat.h"        // Statistics
+#include "log.h"         // Logging macros
+
+// Removed (not needed for Day 3):
+// #include "blinky.h"   - Visual indicator, not critical
+// #include "gps_gtu7.h" - GPS module, unrelated to sensor
+// #include "mem.h"      - Memory management, not needed yet
 
 ////////////////////////////////////////////////////////////////////////////////
 // Common macros
@@ -171,18 +174,10 @@ static bool test_completed = false;
 
 void app_main(void)
 {
-    int32_t result;;
+    int32_t result;
     struct console_cfg console_cfg;
-//    struct gps_cfg gps_cfg;
     struct i2c_cfg i2c_cfg;
     struct ttys_cfg ttys_cfg;
-//    struct blinky_cfg blinky_cfg = {
-//        .dout_idx = DOUT_LED_2,
-//        .code_num_blinks = 5,
-//        .code_period_ms = 1000,
-//        .sep_num_blinks = 5,
-//        .sep_period_ms = 200,
-//    };
     struct tmphm_cfg tmphm_cfg;
 
     //
@@ -190,197 +185,82 @@ void app_main(void)
     //
 
     setvbuf(stdout, NULL, _IONBF, 0);
-    printc("\nInit: Init modules\n");
-    result = ttys_get_def_cfg(TTYS_INSTANCE_UART2, &ttys_cfg);
-    if (result < 0) {
-        log_error("ttys_get_def_cfg error %d\n", result);
-        INC_SAT_U16(cnts_u16[CNT_INIT_ERR]);
-    } else {
-        result = ttys_init(TTYS_INSTANCE_UART2, &ttys_cfg);
-        if (result < 0) {
-            log_error("ttys_init UART2 error %d\n", result);
-            INC_SAT_U16(cnts_u16[CNT_INIT_ERR]);
-        }
-    }
+    printc("\n========================================\n");
+    printc("  DAY 3: TMPHM Module Build Challenge\n");
+    printc("========================================\n");
+    
+    // ===== INIT PHASE: Configure and initialize modules =====
+    printc("\n[INIT] Initializing modules...\n");
+    
+    // Serial UART (for console communication)
+    ttys_get_def_cfg(TTYS_INSTANCE_UART2, &ttys_cfg);
+    ttys_init(TTYS_INSTANCE_UART2, &ttys_cfg);
+    
+    // Command processor (handles console commands)
+    cmd_init(NULL);
+    
+    // Console (user interface)
+    console_get_def_cfg(&console_cfg);
+    console_init(&console_cfg);
+    
+    // Timer (for TMPHM periodic sampling - CRITICAL!)
+    tmr_init(NULL);
+    
+    // Digital I/O (for button test)
+    dio_init(&dio_cfg);
+    
+    // I2C Driver (Day 2 - foundation for sensor communication)
+    i2c_get_def_cfg(I2C_INSTANCE_3, &i2c_cfg);
+    i2c_init(I2C_INSTANCE_3, &i2c_cfg);
+    
+    // TMPHM Module (Day 3 - YOU'RE BUILDING THIS!)
+    tmphm_get_def_cfg(TMPHM_INSTANCE_1, &tmphm_cfg);
+    tmphm_cfg.i2c_instance_id = I2C_INSTANCE_3;  // Tell TMPHM to use I2C bus 3
+    tmphm_init(TMPHM_INSTANCE_1, &tmphm_cfg);
 
-    result = ttys_get_def_cfg(TTYS_INSTANCE_UART6, &ttys_cfg);
-    if (result < 0) {
-        log_error("ttys_get_def_cfg error %d\n", result);
-        INC_SAT_U16(cnts_u16[CNT_INIT_ERR]);
-    } else {
-        result = ttys_init(TTYS_INSTANCE_UART6, &ttys_cfg);
-        if (result < 0) {
-            log_error("ttys_init UART6 error %d\n", result);
-            INC_SAT_U16(cnts_u16[CNT_INIT_ERR]);
-        }
-    }
-
-    result = cmd_init(NULL);
-    if (result < 0) {
-        log_error("cmd_init error %d\n", result);
-        INC_SAT_U16(cnts_u16[CNT_INIT_ERR]);
-    }
-
-    result = console_get_def_cfg(&console_cfg);
-    if (result < 0) {
-        log_error("console_get_def_cfg error %d\n", result);
-        INC_SAT_U16(cnts_u16[CNT_INIT_ERR]);
-    } else {
-        result = console_init(&console_cfg);
-        if (result < 0) {
-            log_error("console_init error %d\n", result);
-            INC_SAT_U16(cnts_u16[CNT_INIT_ERR]);
-        }
-    }
-
-    result = tmr_init(NULL);
-    if (result < 0) {
-        log_error("tmr_init error %d\n", result);
-        INC_SAT_U16(cnts_u16[CNT_INIT_ERR]);
-    }
-
-    result = dio_init(&dio_cfg);
-    if (result < 0) {
-        log_error("dio_init error %d\n", result);
-        INC_SAT_U16(cnts_u16[CNT_INIT_ERR]);
-    }
-
-//    result = gps_get_def_cfg(&gps_cfg);
-//    if (result < 0) {
-//        log_error("gps_get_def_cfg error %d\n", result);
-//        INC_SAT_U16(cnts_u16[CNT_INIT_ERR]);
-//    } else {
-//        result = gps_init(&gps_cfg);
-//        if (result < 0) {
-//            log_error("gps_init error %d\n", result);
-//            INC_SAT_U16(cnts_u16[CNT_INIT_ERR]);
-//        }
-//    }
-
-//    result = blinky_init(&blinky_cfg);
-//    if (result < 0) {
-//        log_error("blinky_init error %d\n", result);
-//        INC_SAT_U16(cnts_u16[CNT_INIT_ERR]);
-//    }
-
-    result = i2c_get_def_cfg(I2C_INSTANCE_3, &i2c_cfg);
-    if (result < 0) {
-        log_error("i2c_get_def_cfg error %d\n", result);
-        INC_SAT_U16(cnts_u16[CNT_INIT_ERR]);
-    } else {
-        result = i2c_init(I2C_INSTANCE_3, &i2c_cfg);
-        if (result < 0) {
-            log_error("i2c_init error %d\n", result);
-            INC_SAT_U16(cnts_u16[CNT_INIT_ERR]);
-        }
-    }
-
-    result = tmphm_get_def_cfg(TMPHM_INSTANCE_1, &tmphm_cfg);
-    if (result < 0) {
-        log_error("tmphm_get_def_cfg error %d\n", result);
-        INC_SAT_U16(cnts_u16[CNT_INIT_ERR]);
-    } else {
-        tmphm_cfg.i2c_instance_id = I2C_INSTANCE_3;
-        result = tmphm_init(TMPHM_INSTANCE_1, &tmphm_cfg);
-        if (result < 0) {
-            log_error("tmphm_init error %d\n", result);
-            INC_SAT_U16(cnts_u16[CNT_INIT_ERR]);
-        }
-    }
-
-    //
-    // Invoke the start API on modules the use it.
-    //
-
-    printc("Init: Start modules\n");
-
-    result = ttys_start(TTYS_INSTANCE_UART2);
-    if (result < 0) {
-        log_error("ttys_start UART2 error %d\n", result);
-        INC_SAT_U16(cnts_u16[CNT_START_ERR]);
-    }
-
-    result = ttys_start(TTYS_INSTANCE_UART6);
-    if (result < 0) {
-        log_error("ttys_start UART6 error %d\n", result);
-        INC_SAT_U16(cnts_u16[CNT_START_ERR]);
-    }
-
-    result = tmr_start();
-    if (result < 0) {
-        log_error("tmr_start error %d\n", result);
-        INC_SAT_U16(cnts_u16[CNT_START_ERR]);
-    }
-
-    result = dio_start();
-    if (result < 0) {
-        log_error("dio_start error %d\n", result);
-        INC_SAT_U16(cnts_u16[CNT_START_ERR]);
-    }
-
-    result = gps_start();
-    if (result < 0) {
-        log_error("gps_start error %d\n", result);
-        INC_SAT_U16(cnts_u16[CNT_START_ERR]);
-    }
-
-    result = mem_start();
-    if (result < 0) {
-        log_error("mem_start error %d\n", result);
-        INC_SAT_U16(cnts_u16[CNT_START_ERR]);
-    }
-
-    result = i2c_start(I2C_INSTANCE_3);
-    if (result < 0) {
-        log_error("i2c_start 3 error %d\n", result);
-        INC_SAT_U16(cnts_u16[CNT_START_ERR]);
-    }
-
-    result = tmphm_start(TMPHM_INSTANCE_1);
-    if (result < 0) {
-        log_error("tmphm_start 1 error %d\n", result);
-        INC_SAT_U16(cnts_u16[CNT_START_ERR]);
-    }
-
-    result = lwl_start();
-    if (result < 0) {
-        log_error("lwl_start error %d\n", result);
-        INC_SAT_U16(cnts_u16[CNT_START_ERR]);
-    }
-
-    // Enable LWL recording
-    lwl_enable(true);
-
-    result = cmd_register(&cmd_info);
-    if (result < 0) {
-        log_error("main: cmd_register error %d\n", result);
-        INC_SAT_U16(cnts_u16[CNT_START_ERR]);
-    }
+    // ===== START PHASE: Enable modules for operation =====
+    printc("\n[START] Starting modules...\n");
+    
+    // Serial UART
+    ttys_start(TTYS_INSTANCE_UART2);
+    
+    // Timer (CRITICAL - without this, TMPHM won't get periodic trigger!)
+    tmr_start();
+    
+    // Digital I/O (for button)
+    dio_start();
+    
+    // I2C Driver (enables interrupts, gets guard timer)
+    i2c_start(I2C_INSTANCE_3);
+    
+    // TMPHM Module (registers 1-second timer - YOUR CODE DOES THIS!)
+    tmphm_start(TMPHM_INSTANCE_1);
+    
+    // LWL Logging (Day 3 afternoon - flight recorder)
+    lwl_start();
+    lwl_enable(true);  // Start recording activity
+    
+    // Console commands
+    cmd_register(&cmd_info);
 
     stat_dur_init(&stat_loop_dur);
 
-    //
-    // In the super loop invoke the run API on modules the use it.
-    //
-
-    printc("Init: Enter super loop\n");
+    // ===== SUPER LOOP: Run modules continuously =====
+    printc("\n[READY] Entering super loop...\n");
+    printc("Waiting for sensor readings (every 1 second)...\n\n");
 
     while (1)
     {
         stat_dur_restart(&stat_loop_dur);
 
-        result = console_run();
-        if (result < 0)
-            INC_SAT_U16(cnts_u16[CNT_RUN_ERR]);
+        // Console - Handle user commands
+        console_run();
 
+        // Timer - Fire callbacks (triggers TMPHM measurements!)
+        tmr_run();
 
-        result = tmr_run();
-        if (result < 0)
-            INC_SAT_U16(cnts_u16[CNT_RUN_ERR]);
-
-        result = tmphm_run(TMPHM_INSTANCE_1);
-        if (result < 0)
-            INC_SAT_U16(cnts_u16[CNT_RUN_ERR]);
+        // TMPHM - Process state machine (YOUR CODE!)
+        tmphm_run(TMPHM_INSTANCE_1);
 
         // Button polling for I2C auto test trigger
         int32_t button_state = dio_get(DIN_BUTTON_1);
