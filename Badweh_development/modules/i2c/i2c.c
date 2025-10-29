@@ -36,9 +36,7 @@
 // MACROS - Interrupt control
 ////////////////////////////////////////////////////////////////////////////////
 
-// LWL (Lightweight Logging) configuration
-#define LWL_BASE_ID 20  // I2C module uses IDs 20-29
-#define LWL_NUM 10
+// LWL (Lightweight Logging) - uses global definitions from lwl.h
 
 #define INTERRUPT_ENABLE_MASK (LL_I2C_CR2_ITEVTEN | LL_I2C_CR2_ITBUFEN | \
                                LL_I2C_CR2_ITERREN)
@@ -227,6 +225,7 @@ int32_t i2c_reserve(enum i2c_instance_id instance_id)
     }
     
     i2c_states[instance_id].reserved = true;
+    LWL("I2C_RESERVE", 1, LWL_1(instance_id));
     return 0;
 }
 
@@ -240,6 +239,7 @@ int32_t i2c_release(enum i2c_instance_id instance_id)
         return MOD_ERR_BAD_INSTANCE;
         
     i2c_states[instance_id].reserved = false;
+    LWL("I2C_RELEASE", 1, LWL_1(instance_id));
     return 0;
 }
 
@@ -444,6 +444,7 @@ static int32_t start_op(enum i2c_instance_id instance_id, uint32_t dest_addr,
                         enum states init_state)
 {
     struct i2c_state* st;
+    LWL("I2C_OP_START", 3, LWL_1(instance_id), LWL_2(dest_addr), LWL_1(msg_len));
 
     if (instance_id >= I2C_NUM_INSTANCES ||
         i2c_states[instance_id].i2c_reg_base == NULL)
@@ -532,6 +533,8 @@ static void i2c_interrupt(enum i2c_instance_id instance_id,
             
             case STATE_MSTR_WR_GEN_START:
                 // START condition sent?
+            	LWL("i2c_state", 1, LWL_1(st->state));
+            	LWL("i2c_start", 0);
                 if (sr1 & LL_I2C_SR1_SB) {
                     LWL("I2C_WR_START", 2, LWL_1(st->dest_addr), LWL_1(st->msg_len));
                     // Write address with W bit (bit 0 = 0)
@@ -542,6 +545,7 @@ static void i2c_interrupt(enum i2c_instance_id instance_id,
 
             case STATE_MSTR_WR_SENDING_ADDR:
                 // Address ACKed?
+            	LWL("i2c_state", 1, LWL_1(st->state));
                 if (sr1 & LL_I2C_SR1_ADDR) {
                     LWL("I2C_WR_ADDR_ACK", 1, LWL_1(st->dest_addr));
                     // Clear ADDR flag by reading SR2
@@ -562,6 +566,7 @@ static void i2c_interrupt(enum i2c_instance_id instance_id,
 
             case STATE_MSTR_WR_SENDING_DATA:
                 // Ready to send next byte?
+            	LWL("i2c_state", 1, LWL_1(st->state));
                 if (sr1 & (LL_I2C_SR1_TXE | LL_I2C_SR1_BTF)) {
                     if (st->msg_bytes_xferred < st->msg_len) {
                         // Send next byte
@@ -580,6 +585,7 @@ static void i2c_interrupt(enum i2c_instance_id instance_id,
             
             case STATE_MSTR_RD_GEN_START:
                 // START condition sent?
+            	LWL("i2c_state", 1, LWL_1(st->state));
                 if (sr1 & LL_I2C_SR1_SB) {
                     LWL("I2C_RD_START", 2, LWL_1(st->dest_addr), LWL_1(st->msg_len));
                     // Write address with R bit (bit 0 = 1)
@@ -590,6 +596,7 @@ static void i2c_interrupt(enum i2c_instance_id instance_id,
 
             case STATE_MSTR_RD_SENDING_ADDR:
                 // Address ACKed?
+            	LWL("i2c_state", 1, LWL_1(st->state));
                 if (sr1 & LL_I2C_SR1_ADDR) {
                     LWL("I2C_RD_ADDR_ACK", 1, LWL_1(st->dest_addr));
                     if (st->msg_len == 1) {
@@ -612,6 +619,7 @@ static void i2c_interrupt(enum i2c_instance_id instance_id,
 
             case STATE_MSTR_RD_READING_DATA:
                 // Data byte received?
+            	LWL("i2c_state", 1, LWL_1(st->state));
                 if (sr1 & LL_I2C_SR1_RXNE) {
                     // Read the byte
                     st->msg_bfr[st->msg_bytes_xferred++] = st->i2c_reg_base->DR;
@@ -688,6 +696,7 @@ static void op_stop_success(struct i2c_state* st, bool set_stop)
     tmr_inst_start(st->guard_tmr_id, 0);
     
     LL_I2C_Disable(st->i2c_reg_base);
+    LWL("I2C_SUCCESS", 2, LWL_1(st->msg_bytes_xferred), LWL_1(st->msg_len));
     st->state = STATE_IDLE;
     st->last_op_error = I2C_ERR_NONE;
 }
@@ -707,6 +716,7 @@ static void op_stop_fail(struct i2c_state* st, enum i2c_errors error)
 
     // Record error (only first error per transaction)
     if (st->last_op_error == I2C_ERR_NONE) {
+    	LWL("I2C_FAIL", 2, LWL_1(error), LWL_1(st->state));
         st->last_op_error = error;
     }
     

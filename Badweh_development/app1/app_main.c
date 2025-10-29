@@ -174,7 +174,6 @@ static bool test_completed = false;
 
 void app_main(void)
 {
-    int32_t result;
     struct console_cfg console_cfg;
     struct i2c_cfg i2c_cfg;
     struct ttys_cfg ttys_cfg;
@@ -239,6 +238,8 @@ void app_main(void)
     // LWL Logging (Day 3 afternoon - flight recorder)
     lwl_start();
     lwl_enable(true);  // Start recording activity
+    LWL("sys_init", 0);                      // Simple log
+    LWL("i2c_reserve", 1, LWL_1(3));        // Log with 1-byte arg (I2C instance 3)
     
     // Console commands
     cmd_register(&cmd_info);

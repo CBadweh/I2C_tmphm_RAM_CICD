@@ -550,12 +550,12 @@ def main():
     _log.setLevel(log_map[args.log.upper()])
 
     error_count = 0
-    for dir in (r'C:\Users\gene\Documents\Gene\proj\mcu-classes\modules',
-                r'C:\Users\gene\Documents\Gene\proj\mcu-classes\app1'):
+    for dir in (r'C:\Users\Sheen\Desktop\Embedded_System\gene_Baremetal_I2CTmphm_RAM_CICD\Badweh_Development\modules',
+            r'C:\Users\Sheen\Desktop\Embedded_System\gene_Baremetal_I2CTmphm_RAM_CICD\Badweh_Development\app1'):
         error_count += parse_source_dir(dir)
 
     if error_count == 0:
-        decode_data_file('lwl-dump.txt')
+        decode_data_file('lwl_dump.txt')
 
 if __name__ == '__main__':
     try:

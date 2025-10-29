@@ -1099,3 +1099,1988 @@ Both Options 3 and 4 are **good approaches**. But:
 
 **Use Option 4. Trust me - your 40 years from now self will thank you!** 🎯
 
+---
+
+# Part 2: Creating Progressive Reconstruction Guides
+
+## **How to Build Learning Guides for Future Topics**
+
+This section documents the template and principles for creating effective Progressive Reconstruction guides (like the TMPHM guide that worked well).
+
+---
+
+## **Guide Creation Principles**
+
+### **1. Balance: Guidance vs Discovery**
+
+**Too Much Help (Bad):**
+```c
+// Fill this in:
+cfg->i2c_instance_id = I2C_INSTANCE_3;  // ← Just copy this!
+```
+Result: No thinking, no learning
+
+**Too Little Help (Bad):**
+```c
+// Fill in the configuration
+// ???
+```
+Result: Frustration, stuck, give up
+
+**Just Right (Good):**
+```c
+// Question 1: Which I2C bus are you using?
+cfg->i2c_instance_id = ???;
+// Hint: Look at i2c.h - what instances are defined?
+```
+Result: Guided discovery, true learning!
+
+---
+
+### **2. The Three-Layer Question Pattern**
+
+For each piece to implement, provide:
+
+**Layer 1: What (The Goal)**
+```
+"Initialize the state structure with configuration"
+```
+
+**Layer 2: Why (The Reasoning)**
+```
+"Why essential: Clears memory, stores config, sets initial state"
+```
+
+**Layer 3: How (The Guidance)**
+```
+Questions to answer:
+- What should you do with state first? (Hint: Clean slate)
+- Where do you store config? (Hint: cfg field exists)
+- What's initial state? (Hint: Are we measuring yet?)
+```
+
+**Don't give Layer 4 (The Answer) - let them discover it!**
+
+---
+
+### **3. Progressive Guide Template**
+
+Use this structure for any module:
+
+```markdown
+## **Function N: function_name() - Why Essential?**
+
+### **Purpose:**
+[One sentence: What does this function do?]
+
+### **Why It's Essential:**
+- [Reason 1: System won't work without it because...]
+- [Reason 2: It provides X capability...]
+- [Reason 3: Standard pattern for...]
+
+### **What You Need to Fill In:**
+
+```c
+int32_t function_name(params)
+{
+    // Question 1: [What decision needs to be made?]
+    // Hint: [Where to look or what to consider]
+    
+    // Question 2: [Next decision]
+    // Hint: [Guidance without answer]
+    
+    return ???;
+}
+```
+
+### **Guiding Questions:**
+
+1. **[Topic 1]:** Question that makes them think
+   - Hint: Pointer to where answer is found
+   - Why it matters: Consequence of wrong choice
+
+2. **[Topic 2]:** Follow-up question
+   - Connection to previous concepts
+
+### **Critical Thinking Questions:**
+
+- "What would happen if...?"
+- "Why doesn't this approach work...?"
+- "How does this connect to...?"
+
+### **Common Mistakes to Avoid:**
+
+🎯 **PITFALL:** [Specific mistake juniors make]
+- Why it happens: [The reasoning]
+- How to avoid: [The check]
+
+### **Test Your Understanding:**
+
+*"[Question that proves they internalized the concept]"*
+```
+
+---
+
+### **4. Function Ordering (Dependency-Based)**
+
+**Present functions in this order:**
+
+1. **Configuration functions** (setup)
+   - `get_def_cfg()` - What values?
+   - `init()` - Initialize state
+
+2. **Resource acquisition** (start)
+   - `start()` - Get timers, register callbacks
+
+3. **Core logic** (runtime)
+   - `run()` or state machine - The heart
+   - Break into sub-pieces if complex
+
+4. **Public APIs** (interface)
+   - `get_xxx()` - Query functions
+   - `set_xxx()` - Control functions
+
+5. **Helper functions** (utilities)
+   - CRC, conversion, formatting
+   - Can be given if pure algorithms
+
+---
+
+### **5. What to Include vs Exclude**
+
+**✅ INCLUDE:**
+- Function skeleton with `???` for blanks
+- Questions that guide thinking
+- Hints pointing to resources (datasheets, other modules)
+- Why each piece matters
+- Critical thinking prompts
+- Common pitfalls from experience
+- Test checkpoints
+
+**❌ EXCLUDE:**
+- Direct answers (let them discover!)
+- Complete implementations
+- Too much theory upfront
+- Optimization details (focus on correctness first)
+- Production features (error counters, etc.) until core works
+
+**🤔 CONDITIONAL:**
+- Pure algorithms (CRC, math) - OK to give
+- Complex hardware sequences - Give simplified version first
+- Error handling - Start without, add after core works
+
+---
+
+### **6. Hint Quality Guidelines**
+
+**Bad Hint:**
+```
+// Hint: Use the right function
+```
+Too vague!
+
+**Good Hint:**
+```
+// Hint: Look at i2c.h for reserve function
+```
+Points to resource!
+
+**Great Hint:**
+```
+// Hint: Look at i2c.h - you need to reserve I2C before using it
+// Think: What happens if two modules use I2C at once?
+```
+Points to resource + explains WHY!
+
+---
+
+### **7. Checkpoint Structure**
+
+**After each function, include:**
+
+```markdown
+### **Build Checkpoint:**
+
+**After completing this function:**
+1. ✅ Does it compile?
+2. ✅ Can you explain what each line does?
+3. ✅ Do you understand WHY each step is needed?
+
+**If stuck:** [Where to look for help]
+
+**When ready:** Move to [Next Function]
+```
+
+---
+
+## **Complete Guide Template Example**
+
+Here's how to structure a full module guide:
+
+```markdown
+# Module XYZ Progressive Reconstruction Guide
+
+## **Overview**
+- What this module does (2-3 sentences)
+- Key concepts required (prerequisites)
+- Estimated time: X hours
+
+---
+
+## **Essential Patterns Used in This Module**
+
+This module uses the following code patterns. Review these before starting:
+
+### **Pattern X: [Name]**
+[Copy relevant pattern from "Essential Code Patterns" section]
+
+### **Pattern Y: [Name]**
+[Copy relevant pattern]
+
+**When you see these patterns in the guide, you'll know the structure to use!**
+
+---
+
+## **Phase 0: Big Picture (30-60 min)**
+
+### **Study Activities:**
+1. Read entire xyz.c from reference
+2. Draw [architecture/state machine/data flow] diagram
+3. Trace one complete [operation/cycle/transaction]
+
+### **Deliverable:**
+You can explain: "[Core concept in one sentence]"
+
+---
+
+## **Phase 1: Skeleton (30 min)**
+
+### **Data Structures to Define:**
+```c
+enum [states/modes/types] {
+    // What states does system have?
+};
+
+struct [module]_state {
+    // What data needs to be tracked?
+};
+```
+
+### **Guiding Questions:**
+- What information persists across function calls?
+- What configuration do you need?
+- What runtime state changes?
+
+---
+
+## **Phase 2: Function-by-Function Implementation**
+
+### **Function 1: init() - Why Essential?**
+[Use template from section 3 above]
+
+### **Function 2: start() - Why Essential?**
+[Use template from section 3 above]
+
+... [Continue for each function]
+
+---
+
+## **Phase 3: Integration Testing (1 hour)**
+
+### **Test Plan:**
+1. [Test scenario 1]
+2. [Test scenario 2]
+3. [Expected results]
+
+### **Troubleshooting:**
+| Symptom | Likely Cause | Check |
+|---------|--------------|-------|
+| [Problem] | [Reason] | [What to verify] |
+
+---
+
+## **Completion Checklist**
+- [ ] All functions implemented
+- [ ] Code compiles with 0 warnings
+- [ ] [Feature 1] works
+- [ ] [Feature 2] works
+- [ ] Compared to reference code
+- [ ] Understand all differences
+
+---
+
+## **Next Steps**
+- Add [production feature 1]
+- Integrate with [other module]
+- [Advanced topic]
+```
+
+---
+
+## **Example: TMPHM Guide (What Worked Well)**
+
+### **What Made It Effective:**
+
+1. **Clear Purpose Statements**
+   - "Timer triggers measurement cycle" (not "manage timer resources")
+   - Concrete, action-oriented
+
+2. **Incremental Blanks**
+   ```c
+   rc = i2c_reserve(???);  // Clear: fill in ONE thing
+   ```
+   Not:
+   ```c
+   ???  // Unclear: what goes here?
+   ```
+
+3. **Questions Before Hints**
+   - Question: "Which I2C bus?"
+   - Hint: "Look at i2c.h"
+   - Not just: "Use I2C_INSTANCE_3"
+
+4. **Critical Thinking Prompts**
+   - "What if reserve fails?" (Makes them think through error paths)
+   - "Why 17ms not 15ms?" (Connects to real-world engineering)
+
+5. **Visual Structure**
+   ```
+   STATE_IDLE (easiest)
+     ↓
+   STATE_RESERVE (first real work)
+     ↓
+   STATE_WRITE (builds on previous)
+     ↓
+   [Increasing complexity, but manageable steps]
+   ```
+
+6. **Validation Points**
+   - After each state: "Does it compile? Can you explain it?"
+   - Immediate check opportunity
+
+---
+
+## **Principles for Creating Effective Guides**
+
+### **Principle 1: Progressive Difficulty**
+
+**Start Easy:**
+- First function: `get_def_cfg()` (just set 4 values)
+- Second function: `init()` (call memset, save cfg)
+
+**Build Complexity:**
+- Later functions: State machine logic
+- Last pieces: Complex algorithms (CRC)
+
+**Why:** Early wins build confidence for harder parts
+
+---
+
+### **Principle 2: Executable Knowledge**
+
+**Bad (Passive):**
+```
+"The state machine has 5 states that handle measurement cycle"
+```
+
+**Good (Active):**
+```
+"Draw the 5 states and their transitions. 
+What triggers each transition? 
+When does it return to IDLE?"
+```
+
+**Why:** Questions force active engagement
+
+---
+
+### **Principle 3: Just-in-Time Information**
+
+**Bad (Overwhelming):**
+```
+Function 1: Here's info about states, CRC, I2C, timers, all of it!
+```
+
+**Good (Focused):**
+```
+Function 1: Just config values (4 simple assignments)
+Function 2: Just initialization (3 lines)
+Function 3: Now introduce timer concepts
+```
+
+**Why:** Cognitive load management - one concept at a time
+
+---
+
+### **Principle 4: Socratic Method**
+
+**Instead of:**
+```
+"Use i2c_reserve() to reserve the bus"
+```
+
+**Use:**
+```
+Question: How do you get exclusive I2C access?
+Hint: Look at i2c.h APIs
+Think: What happens if two modules use I2C simultaneously?
+```
+
+**Why:** Discovery learning creates deeper understanding
+
+---
+
+### **Principle 5: Fail-Safe Hints**
+
+**Provide escalating help:**
+
+```
+Level 1: "Which I2C bus are you using?"
+         [If stuck after 5 min]
+         
+Level 2: "Hint: Check i2c.h for available instances"
+         [If still stuck after 10 min]
+         
+Level 3: "The instances are I2C_INSTANCE_1, _2, _3"
+         [If still stuck - rarely needed]
+         
+Level 4: "You configured I2C3, so use I2C_INSTANCE_3"
+```
+
+**Learner pulls help as needed, not forced to skip thinking!**
+
+---
+
+## **Essential Code Patterns & Skeletons**
+
+**Before creating module guides, provide these foundational patterns that learners will use repeatedly.**
+
+These are the "building blocks" - teach once, use everywhere!
+
+---
+
+### **Pattern 1: State Machine Skeleton**
+
+**When to use:** Modules with sequential operations (I2C, UART, TMPHM, protocols)
+
+**Basic structure:**
+```c
+// Define the states
+enum states {
+    STATE_IDLE,
+    STATE_STEP_1,
+    STATE_STEP_2,
+    STATE_STEP_3,
+    // ... more states
+};
+
+// State variable in your module's state structure
+struct module_state {
+    enum states state;
+    // ... other fields
+};
+
+// The state machine function (called from super loop)
+int32_t module_run(instance_id)
+{
+    int32_t rc;
+    
+    switch (st.state) {
+        
+        case STATE_IDLE:
+            // Wait for trigger (timer, external event, etc.)
+            break;
+        
+        case STATE_STEP_1:
+            // Do work for step 1
+            // On success: move to STATE_STEP_2
+            // On failure: handle error, maybe go to STATE_IDLE
+            break;
+        
+        case STATE_STEP_2:
+            // Do work for step 2
+            // Advance or handle errors
+            break;
+        
+        // ... more states
+    }
+    
+    return 0;
+}
+```
+
+**Key points:**
+- Each state does ONE thing
+- State transitions move process forward
+- Error paths return to safe state (usually IDLE)
+- Break at end of each case (don't fall through!)
+
+---
+
+### **Pattern 2: Non-Blocking I2C Operations**
+
+**When to use:** Any module that uses I2C (sensors, EEPROMs, etc.)
+
+**Write operation (2-phase):**
+```c
+// Phase 1: Start the write (STATE_XXX)
+case STATE_START_WRITE:
+    rc = i2c_reserve(I2C_INSTANCE_X);
+    if (rc == 0) {
+        // Prepare data
+        buffer[0] = 0xAB;
+        buffer[1] = 0xCD;
+        
+        // Start write (non-blocking!)
+        rc = i2c_write(I2C_INSTANCE_X, sensor_addr, buffer, 2);
+        if (rc == 0) {
+            st.state = STATE_WAIT_WRITE;  // Move to wait state
+        } else {
+            i2c_release(I2C_INSTANCE_X);  // Failed - release!
+            st.state = STATE_IDLE;
+        }
+    }
+    // If reserve failed, try again next loop
+    break;
+
+// Phase 2: Wait for write to complete (STATE_YYY)
+case STATE_WAIT_WRITE:
+    rc = i2c_get_op_status(I2C_INSTANCE_X);
+    if (rc != MOD_ERR_OP_IN_PROG) {  // Done?
+        if (rc == 0) {
+            // Write succeeded!
+            st.state = STATE_NEXT_STEP;
+        } else {
+            // Write failed!
+            i2c_release(I2C_INSTANCE_X);
+            st.state = STATE_IDLE;
+        }
+    }
+    // Still in progress? Do nothing, check next loop
+    break;
+```
+
+**Read operation (2-phase):**
+```c
+// Phase 1: Start the read
+case STATE_START_READ:
+    rc = i2c_read(I2C_INSTANCE_X, sensor_addr, buffer, num_bytes);
+    if (rc == 0) {
+        st.state = STATE_WAIT_READ;
+    } else {
+        i2c_release(I2C_INSTANCE_X);
+        st.state = STATE_IDLE;
+    }
+    break;
+
+// Phase 2: Wait for read to complete
+case STATE_WAIT_READ:
+    rc = i2c_get_op_status(I2C_INSTANCE_X);
+    if (rc != MOD_ERR_OP_IN_PROG) {
+        if (rc == 0) {
+            // Read succeeded - data is in buffer!
+            // Process the data
+            st.state = STATE_PROCESS_DATA;
+        } else {
+            // Read failed
+            i2c_release(I2C_INSTANCE_X);
+            st.state = STATE_IDLE;
+        }
+    }
+    break;
+```
+
+**Critical rules:**
+- Always reserve before use
+- Always release on errors
+- Always release when done (success or failure)
+- Poll status with `i2c_get_op_status()`
+- `MOD_ERR_OP_IN_PROG` means "still working"
+
+---
+
+### **Pattern 3: Periodic Timer with Callback**
+
+**When to use:** Modules that need periodic sampling, polling, updates
+
+**Setup (in start() function):**
+```c
+int32_t module_start(instance_id)
+{
+    // Get a periodic timer
+    st.tmr_id = tmr_inst_get_cb(period_ms, my_callback, user_data);
+    //                           ^         ^            ^
+    //                           |         |            |
+    //                    How often?  Your function  Optional data
+    
+    if (st.tmr_id < 0) {
+        return MOD_ERR_RESOURCE;  // No timers available
+    }
+    
+    return 0;
+}
+```
+
+**Callback function:**
+```c
+static enum tmr_cb_action my_callback(int32_t tmr_id, uint32_t user_data)
+{
+    // This runs every 'period_ms' automatically!
+    
+    // Typical use: Kick off a state machine cycle
+    if (st.state == STATE_IDLE) {
+        st.state = STATE_START_WORK;
+    } else {
+        // Previous cycle not done - shouldn't happen!
+        log_error("Timer overrun!\n");
+    }
+    
+    return TMR_CB_RESTART;  // Keep firing every period_ms
+    // or
+    return TMR_CB_NONE;     // Stop (one-shot timer)
+}
+```
+
+**Key points:**
+- Callback just **triggers** work (sets state)
+- Actual work done in `module_run()` (not in callback!)
+- Check for overrun (timer firing faster than work completes)
+- Return `TMR_CB_RESTART` for continuous periodic operation
+
+---
+
+### **Pattern 4: Error Handling with Resource Cleanup**
+
+**When to use:** Anywhere you acquire resources (I2C bus, timers, memory, etc.)
+
+**The pattern:**
+```c
+// Acquire resource
+rc = acquire_resource();
+if (rc == 0) {
+    // Use resource
+    rc = use_resource();
+    if (rc == 0) {
+        // Success path
+        st.state = STATE_NEXT;
+    } else {
+        // Use failed - MUST release!
+        release_resource();
+        st.state = STATE_IDLE;
+    }
+} else {
+    // Acquire failed - don't release (you never got it!)
+    // Just try again or go to error state
+    st.state = STATE_IDLE;
+}
+```
+
+**Critical rule: ALWAYS release resources on error paths!**
+
+**Common mistake:**
+```c
+// BAD - forgot to release on error
+rc = use_resource();
+st.state = STATE_NEXT;  // What if use_resource failed?
+```
+
+**Correct:**
+```c
+// GOOD - handle both paths
+rc = use_resource();
+if (rc == 0) {
+    st.state = STATE_NEXT;
+} else {
+    release_resource();  // Clean up!
+    st.state = STATE_IDLE;
+}
+```
+
+---
+
+### **Pattern 5: Polling for Completion (Non-Blocking)**
+
+**When to use:** After starting async operations (I2C, UART TX, DMA, etc.)
+
+**The pattern:**
+```c
+case STATE_WAIT_FOR_OPERATION:
+    // Check if operation completed
+    rc = get_operation_status();
+    
+    if (rc != MOD_ERR_OP_IN_PROG) {  // Not "in progress" = done!
+        // Operation complete (success or failure)
+        if (rc == 0) {
+            // Success!
+            st.state = STATE_NEXT;
+        } else {
+            // Failure!
+            cleanup_resources();
+            st.state = STATE_IDLE;
+        }
+    }
+    // If still in progress, do nothing - check again next loop
+    break;
+```
+
+**Key points:**
+- `MOD_ERR_OP_IN_PROG` = still working (come back later)
+- `0` = success
+- Other values = specific errors
+- Never block waiting - just check and return
+
+---
+
+### **Pattern 6: Time-Based Waiting (Non-Blocking)**
+
+**When to use:** Waiting for sensor measurement, settling time, delays
+
+**The pattern:**
+```c
+case STATE_WAIT_TIME:
+    // Check if enough time has passed
+    if (tmr_get_ms() - st.start_time >= wait_time_ms) {
+        // Time's up! Do next action
+        st.state = STATE_NEXT;
+    }
+    // Not enough time yet - do nothing, check next loop
+    break;
+```
+
+**Example: Wait 15ms for sensor**
+```c
+case STATE_WAIT_SENSOR:
+    if (tmr_get_ms() - st.measurement_start_ms >= 15) {
+        // 15ms passed - sensor ready
+        rc = i2c_read(I2C_INSTANCE_3, 0x44, buffer, 6);
+        st.state = STATE_READ_SENSOR;
+    }
+    break;
+```
+
+**Never do this (blocking!):**
+```c
+// BAD - blocks entire super loop!
+delay_ms(15);  // ❌ System frozen for 15ms!
+```
+
+---
+
+### **Pattern 7: CRC Validation**
+
+**When to use:** Validating data from sensors, communication, storage
+
+**The pattern:**
+```c
+// After receiving data
+uint8_t received_data[2] = {0xAB, 0xCD};
+uint8_t received_crc = 0x92;
+
+// Calculate CRC on received data
+uint8_t calculated_crc = crc8(received_data, 2);
+
+// Compare
+if (calculated_crc == received_crc) {
+    // Data valid - safe to use!
+    process_data(received_data);
+} else {
+    // Data corrupt - reject it!
+    log_error("CRC error\n");
+    // Don't use the data!
+}
+```
+
+**For multiple fields (like TMPHM):**
+```c
+// 6 bytes: [T_MSB][T_LSB][T_CRC][H_MSB][H_LSB][H_CRC]
+if (crc8(&data[0], 2) == data[2] &&  // Temp CRC valid?
+    crc8(&data[3], 2) == data[5]) {  // Humidity CRC valid?
+    // Both valid!
+    process_temperature(&data[0]);
+    process_humidity(&data[3]);
+} else {
+    // At least one failed - reject entire measurement
+    log_error("CRC validation failed\n");
+}
+```
+
+**Critical: If ANY CRC fails, reject ALL data from that transaction!**
+
+---
+
+### **Pattern 8: Integer Math (Avoiding Floating Point)**
+
+**When to use:** Converting sensor data, scaling values, percentages
+
+**The pattern:**
+```c
+// Bad (slow, larger code):
+float temp_celsius = -45.0f + 175.0f * (raw_value / 65535.0f);
+
+// Good (fast, smaller code):
+// Store as degrees × 10 (e.g., 235 = 23.5°C)
+int32_t temp_x10 = -450 + (1750 * raw_value + 32767) / 65535;
+//                  ^^^^   ^^^^                ^^^^^ 
+//                  × 10   × 10                Rounding (divisor/2)
+```
+
+**Rounding in integer division:**
+```c
+// Without rounding:
+int result = 7 / 2;        // = 3 (truncates)
+
+// With rounding:
+int result = (7 + 1) / 2;  // = 4 (rounds)
+//               ^^^ 
+//           divisor/2 for proper rounding
+```
+
+**General formula:**
+```c
+// Convert X using formula: Y = A + B × (X / divisor)
+// Integer version with rounding:
+result = A + (B * X + divisor/2) / divisor;
+```
+
+---
+
+### **Pattern 9: Module Initialization Sequence**
+
+**When to use:** Every module follows this standard pattern
+
+**The three-phase pattern:**
+```c
+// Phase 1: Get default configuration (app_main.c)
+struct module_cfg cfg;
+module_get_def_cfg(INSTANCE_1, &cfg);
+
+// Optionally modify config
+cfg.some_setting = custom_value;
+
+// Phase 2: Initialize (app_main.c)
+module_init(INSTANCE_1, &cfg);
+
+// Phase 3: Start (app_main.c)  
+module_start(INSTANCE_1);
+
+// In super loop: Run (app_main.c)
+while (1) {
+    module_run(INSTANCE_1);
+}
+```
+
+**Inside the module:**
+```c
+int32_t module_init(instance_id, cfg)
+{
+    memset(&st, 0, sizeof(st));  // Clear state
+    st.cfg = *cfg;                // Save config
+    st.state = STATE_IDLE;        // Initial state
+    return 0;
+}
+
+int32_t module_start(instance_id)
+{
+    // Get resources (timers, interrupts, etc.)
+    st.tmr_id = tmr_inst_get_cb(...);
+    if (st.tmr_id < 0)
+        return MOD_ERR_RESOURCE;
+    return 0;
+}
+
+int32_t module_run(instance_id)
+{
+    // State machine or periodic work
+    switch (st.state) {
+        // ... handle states
+    }
+    return 0;
+}
+```
+
+---
+
+### **Pattern 10: Data Validation Before Use**
+
+**When to use:** Processing any external data (sensors, communication, user input)
+
+**The pattern:**
+```c
+// Read data
+uint8_t data[6];
+rc = read_data(data, 6);
+
+if (rc == 0) {
+    // Step 1: Validate integrity (CRC, checksum, parity)
+    if (crc8(data, 4) != data[5]) {
+        log_error("CRC failed\n");
+        return;  // Don't process!
+    }
+    
+    // Step 2: Validate range (sanity check)
+    int32_t value = (data[0] << 8) + data[1];
+    if (value < MIN_VALUE || value > MAX_VALUE) {
+        log_error("Value out of range\n");
+        return;  // Don't process!
+    }
+    
+    // Step 3: NOW safe to use
+    process_value(value);
+}
+```
+
+**Never trust external data!**
+
+---
+
+### **Pattern 11: Fail-First Error Handling**
+
+**When to use:** Functions with multiple error conditions
+
+**The pattern:**
+```c
+int32_t process_data(data, len)
+{
+    // Check errors first (fail-fast)
+    if (data == NULL)
+        return MOD_ERR_ARG;
+    
+    if (len == 0)
+        return MOD_ERR_ARG;
+    
+    if (!st.initialized)
+        return MOD_ERR_STATE;
+    
+    // All checks passed - do the work
+    do_actual_work(data, len);
+    return 0;
+}
+```
+
+**Why:** 
+- Errors exit early (shallow nesting)
+- Success path at bottom (clear flow)
+- Easy to add new checks
+
+**Avoid deep nesting:**
+```c
+// BAD - nested ifs
+if (data != NULL) {
+    if (len > 0) {
+        if (st.initialized) {
+            // Work buried 3 levels deep
+        }
+    }
+}
+```
+
+---
+
+### **Pattern 12: Optional Parameters (NULL checks)**
+
+**When to use:** Functions with optional output parameters
+
+**The pattern:**
+```c
+int32_t get_measurement(instance_id, meas, age_ms)
+{
+    // Required parameter - MUST check
+    if (meas == NULL)
+        return MOD_ERR_ARG;
+    
+    // Return required data
+    *meas = st.last_meas;
+    
+    // Optional parameter - check before using
+    if (age_ms != NULL) {
+        *age_ms = tmr_get_ms() - st.last_meas_ms;
+    }
+    
+    return 0;
+}
+```
+
+**Why check NULL:**
+- Dereferencing NULL = crash!
+- Optional means "caller might not want it"
+
+---
+
+### **Pattern 13: Configuration Structure Usage**
+
+**When to use:** Storing module settings
+
+**The pattern:**
+```c
+// Configuration structure (what user sets)
+struct module_cfg {
+    uint32_t setting1;  // User-configurable values
+    uint32_t setting2;
+    uint8_t mode;
+};
+
+// State structure (runtime data)
+struct module_state {
+    struct module_cfg cfg;  // Copy of config (for later use)
+    
+    // Runtime state variables
+    enum states state;
+    uint32_t timestamp;
+    uint8_t buffer[10];
+    // ... more runtime data
+};
+
+// In init: Save config for later
+int32_t module_init(instance_id, cfg)
+{
+    st.cfg = *cfg;  // Save it - you'll need these values later!
+}
+
+// In run: Use saved config values
+int32_t module_run(instance_id)
+{
+    // Access config: st.cfg.setting1
+    if (st.cfg.mode == MODE_FAST) {
+        // Do something based on config
+    }
+}
+```
+
+**Why:**
+- Config passed at init, not available later
+- Save it in state structure for runtime use
+
+---
+
+### **Pattern 14: Guard Timer for Operations**
+
+**When to use:** Protecting against stuck operations (I2C, state machines)
+
+**The pattern:**
+```c
+// Start operation with timeout protection
+case STATE_START_OPERATION:
+    // Start the guard timer (e.g., 100ms timeout)
+    tmr_inst_start(st.guard_timer_id, 100);
+    
+    // Start the operation
+    rc = start_operation();
+    if (rc == 0) {
+        st.state = STATE_WAIT_OPERATION;
+    }
+    break;
+
+// Guard timer callback (if operation times out)
+static enum tmr_cb_action guard_timeout(int32_t tmr_id, uint32_t user_data)
+{
+    // Operation took too long!
+    log_error("Operation timeout!\n");
+    
+    // Stop operation, clean up
+    stop_operation();
+    release_resources();
+    st.state = STATE_IDLE;
+    
+    return TMR_CB_NONE;  // One-shot
+}
+
+// When operation completes successfully
+case STATE_WAIT_OPERATION:
+    rc = check_operation();
+    if (rc == 0) {
+        // Success - cancel guard timer!
+        tmr_inst_start(st.guard_timer_id, 0);
+        st.state = STATE_NEXT;
+    }
+    break;
+```
+
+**Why:** Prevents operations from hanging forever
+
+---
+
+### **Pattern 15: Measurement Age Tracking**
+
+**When to use:** Modules that cache data (sensors, GPS, etc.)
+
+**The pattern:**
+```c
+struct module_state {
+    uint32_t last_update_ms;  // When was data updated?
+    int32_t cached_value;      // The cached data
+    bool have_data;            // At least one update?
+};
+
+// When updating data
+st.cached_value = new_value;
+st.last_update_ms = tmr_get_ms();  // Record timestamp
+st.have_data = true;
+
+// When retrieving data
+int32_t get_cached_value(value, age_ms)
+{
+    if (!st.have_data)
+        return MOD_ERR_UNAVAIL;  // No data yet
+    
+    *value = st.cached_value;
+    
+    // Optional: Report age
+    if (age_ms != NULL) {
+        *age_ms = tmr_get_ms() - st.last_update_ms;
+    }
+    
+    return 0;
+}
+```
+
+**Advanced: Staleness check**
+```c
+// Don't return data older than 5 seconds
+if (tmr_get_ms() - st.last_update_ms > 5000) {
+    return MOD_ERR_STALE;
+}
+```
+
+---
+
+### **Pattern 16: Multi-Byte Data Assembly (MSB/LSB)**
+
+**When to use:** Reading 16-bit values from I2C, UART, etc.
+
+**The pattern:**
+```c
+// Received bytes (big-endian: MSB first)
+uint8_t msb = 0x12;
+uint8_t lsb = 0x34;
+
+// Combine into 16-bit value
+uint16_t value = (msb << 8) | lsb;  // = 0x1234
+// or
+uint16_t value = (msb << 8) + lsb;  // Same result
+
+// From array
+uint8_t data[2] = {0x12, 0x34};
+uint16_t value = (data[0] << 8) + data[1];
+```
+
+**For signed values:**
+```c
+int16_t signed_value = (int16_t)((data[0] << 8) + data[1]);
+```
+
+**Common mistake:**
+```c
+// WRONG order
+uint16_t value = (lsb << 8) + msb;  // = 0x3412 (backwards!)
+```
+
+---
+
+### **Pattern 17: Boolean Flags for State Tracking**
+
+**When to use:** Simple on/off conditions, availability, initialization
+
+**The pattern:**
+```c
+struct module_state {
+    bool initialized;   // Has init() been called?
+    bool reserved;      // Resource in use?
+    bool have_data;     // Data available?
+    bool error_occurred; // Error condition?
+};
+
+// Using flags
+if (!st.initialized) {
+    return MOD_ERR_STATE;  // Not ready
+}
+
+if (st.reserved) {
+    return MOD_ERR_RESOURCE;  // Already in use
+}
+
+if (!st.have_data) {
+    return MOD_ERR_UNAVAIL;  // No data yet
+}
+```
+
+**Why booleans:**
+- Clear intent (`have_data` vs `data_count > 0`)
+- Less error-prone
+- Self-documenting
+
+---
+
+## **How to Use These Patterns in Guides**
+
+### **Step 1: Introduce Pattern Early**
+
+Before asking learner to use it, explain:
+
+```markdown
+### **Essential Pattern: State Machines**
+
+[Show Pattern 1 skeleton here]
+
+You'll use this pattern in the next sections.
+```
+
+### **Step 2: Reference Pattern in Questions**
+
+```markdown
+### **Function: module_run()**
+
+Using the State Machine pattern (see above):
+
+```c
+int32_t module_run(instance_id)
+{
+    // Question: What's the skeleton for state machine?
+    // Hint: Review "Pattern 1: State Machine Skeleton"
+    ???
+}
+```
+```
+
+### **Step 3: Combine Patterns**
+
+```markdown
+### **STATE_WRITE:**
+
+This combines TWO patterns:
+1. Non-Blocking I2C (Pattern 2)
+2. Error Handling with Cleanup (Pattern 4)
+
+```c
+case STATE_WRITE:
+    // Use Pattern 2 structure
+    rc = i2c_write(...);
+    // Use Pattern 4 error handling
+    if (rc == 0) {
+        ???
+    } else {
+        ???  // Don't forget cleanup!
+    }
+    break;
+```
+```
+
+---
+
+## **Pattern Reference Quick Guide**
+
+**For state-based modules:**
+- Pattern 1: State Machine Skeleton
+- Pattern 5: Polling for Completion
+- Pattern 6: Time-Based Waiting
+
+**For I2C modules:**
+- Pattern 2: Non-Blocking I2C Operations
+- Pattern 4: Error Handling with Cleanup
+- Pattern 7: CRC Validation
+- Pattern 16: Multi-Byte Data Assembly
+
+**For periodic modules:**
+- Pattern 3: Periodic Timer with Callback
+- Pattern 15: Measurement Age Tracking
+
+**For all modules:**
+- Pattern 4: Error Handling
+- Pattern 9: Module Initialization
+- Pattern 11: Fail-First Error Handling
+- Pattern 12: Optional Parameters
+- Pattern 17: Boolean Flags
+
+---
+
+## **Concrete Example: TMPHM Guide With Patterns**
+
+### **How Patterns Were Used in the Successful TMPHM Guide:**
+
+**At the start of guide (after Overview):**
+
+```markdown
+## **Essential Patterns Used in TMPHM**
+
+Before building, understand these patterns you'll use:
+
+### **Pattern 1: State Machine Skeleton**
+[Full Pattern 1 code shown]
+
+### **Pattern 3: Periodic Timer with Callback**
+[Full Pattern 3 code shown]
+
+### **Pattern 2: Non-Blocking I2C Operations**  
+[Full Pattern 2 code shown]
+
+Now you have the building blocks - let's use them!
+```
+
+**In tmphm_run() guide:**
+
+```markdown
+### **Function: tmphm_run() - The Heart**
+
+**Using Pattern 1 (State Machine Skeleton):**
+
+```c
+int32_t tmphm_run(enum tmphm_instance_id instance_id)
+{
+    int32_t rc;
+    
+    // Question: What's the state machine structure?
+    // Hint: See Pattern 1 above
+    switch (st.state) {
+        case STATE_IDLE:
+            ???
+            break;
+        // ... more states
+    }
+    return 0;
+}
+```
+
+**Learner knows:** "Oh, I need switch(st.state) with case/break!"
+```
+
+**In STATE_RESERVE_I2C guide:**
+
+```markdown
+### **STATE_RESERVE_I2C**
+
+**Combines Pattern 2 (I2C) + Pattern 4 (Error Handling):**
+
+```c
+case STATE_RESERVE_I2C:
+    // Using Pattern 2: Non-Blocking I2C
+    rc = i2c_reserve(???);
+    if (rc == 0) {
+        // Prepare command
+        st.msg_bfr[0] = 0x2C;
+        st.msg_bfr[1] = 0x06;
+        
+        rc = i2c_write(???, ???, ???, ???);
+        
+        // Using Pattern 4: Error Handling with Cleanup
+        if (rc == 0) {
+            st.state = STATE_WRITE_MEAS_CMD;
+        } else {
+            ???  // Pattern 4: What MUST you do on error?
+            st.state = STATE_IDLE;
+        }
+    }
+    break;
+```
+
+**Learner knows:** "Pattern 4 says release resources on error!"
+```
+
+**In STATE_READ guide:**
+
+```markdown
+### **STATE_READ_MEAS_VALUE**
+
+**Uses Pattern 5 (Polling) + Pattern 7 (CRC):**
+
+```c
+case STATE_READ_MEAS_VALUE:
+    // Pattern 5: Poll for completion
+    rc = i2c_get_op_status(???);
+    if (rc != MOD_ERR_OP_IN_PROG) {
+        if (rc == 0) {
+            // Pattern 7: CRC Validation
+            if (crc8(&msg[0], 2) == msg[2] &&
+                crc8(&msg[3], 2) == msg[5]) {
+                // Valid - process data
+                ???
+            }
+        }
+        // Pattern 4: Always cleanup
+        i2c_release(???);
+        st.state = STATE_IDLE;
+    }
+    break;
+```
+
+**Learner knows:** Structure from patterns, just fills in specifics!
+```
+
+**Result:** Learner spends mental energy on **module logic**, not **discovering basic patterns**!
+
+---
+
+## **Guide Creation Workflow**
+
+### **Step 0: Identify Required Patterns (30 min)**
+
+**FIRST:** Determine which Essential Code Patterns this module uses.
+
+For the module you're teaching (e.g., TMPHM):
+
+**Ask:**
+1. Does it use a state machine? → Provide Pattern 1
+2. Does it use I2C? → Provide Pattern 2
+3. Does it use timers? → Provide Pattern 3
+4. Does it validate data? → Provide Pattern 7
+5. Does it convert sensor data? → Provide Pattern 8
+
+**Output:** List of patterns to include at the start of the guide
+
+**Example for TMPHM:**
+- ✅ Pattern 1: State Machine (5 states)
+- ✅ Pattern 2: Non-Blocking I2C (reserve/write/read)
+- ✅ Pattern 3: Periodic Timer (1 second sampling)
+- ✅ Pattern 6: Time-Based Wait (15ms for sensor)
+- ✅ Pattern 7: CRC Validation (data integrity)
+- ✅ Pattern 8: Integer Math (temp/humidity conversion)
+
+---
+
+### **Step 1: Analyze Reference Code (1 hour)**
+
+For the module you're teaching:
+
+1. **Identify core functions** (ignore debug/console commands)
+2. **List in dependency order** (what must be built first?)
+3. **Find the "critical path"** (minimum to make it work)
+4. **Note common mistakes** (from experience or trying yourself)
+5. **Map functions to patterns** (which patterns does each use?)
+
+**Output:** Function list in build order with pattern mappings
+
+---
+
+### **Step 2: Create Big Picture Section (30 min)**
+
+```markdown
+## **Overview**
+- [What module does in 2-3 sentences]
+- [Key concepts: state machine, I2C, timers, etc.]
+
+## **Phase 0: Big Picture**
+- Study entire [module].c
+- Draw [diagram type: state machine/flow/architecture]
+- Trace one [cycle/operation/transaction]
+
+Deliverable: "[Can you explain X?]"
+```
+
+**Include:** Architecture diagrams, data flow, timing diagrams
+
+---
+
+### **Step 3: Create Function Guides (2-3 hours)**
+
+**For each function:**
+
+1. **Copy function signature**
+   ```c
+   int32_t function_name(params)
+   {
+   ```
+
+2. **Add skeleton with ??? blanks**
+   ```c
+       // Question: What goes here?
+       var = ???;
+   ```
+
+3. **Write "Why Essential" section**
+   - What breaks without it?
+   - What capability does it provide?
+
+4. **Create guiding questions**
+   - Focus on decisions they must make
+   - Point to resources (datasheets, other code)
+   - Include "why" reasoning
+
+5. **Add critical thinking**
+   - "What if this fails?"
+   - "Why this approach not that one?"
+
+6. **Add pitfalls**
+   - Common mistakes you've seen
+   - Why they happen
+   - How to avoid
+
+---
+
+### **Step 4: Add Checkpoints (30 min)**
+
+**After each function or major piece:**
+
+```markdown
+### **Checkpoint:**
+- [ ] Code compiles
+- [ ] You can explain each line
+- [ ] Test: [Specific thing to verify]
+
+**If stuck:** [Where to get help]
+**Next:** [What to build next]
+```
+
+---
+
+### **Step 5: Create Integration Section (30 min)**
+
+```markdown
+## **Phase 3: Integration & Testing**
+
+### **End-to-End Test:**
+1. [Action] → [Expected result]
+2. [Action] → [Expected result]
+
+### **Troubleshooting Guide:**
+| Problem | Cause | Fix |
+|---------|-------|-----|
+| [Symptom] | [Why] | [How] |
+
+### **Success Criteria:**
+- [ ] [Observable behavior 1]
+- [ ] [Observable behavior 2]
+```
+
+---
+
+## **Template Checklist**
+
+When creating a new guide, ensure it has:
+
+**Structural Elements:**
+- [ ] Big Picture section (see entire system first)
+- [ ] Function-by-function breakdown (progressive)
+- [ ] Code skeletons with ??? blanks (active learning)
+- [ ] Questions before hints (discovery-based)
+- [ ] Checkpoints after each piece (tight feedback)
+- [ ] Integration testing section (end-to-end)
+- [ ] Troubleshooting guide (common issues)
+
+**Content Quality:**
+- [ ] Guiding questions (not direct answers)
+- [ ] Hints point to resources (datasheets, APIs, other code)
+- [ ] "Why essential" explains importance
+- [ ] Critical thinking prompts included
+- [ ] Pitfalls highlighted (from experience)
+- [ ] Test understanding questions at end
+- [ ] Time estimates per section
+
+**Learning Psychology:**
+- [ ] Starts easy, builds complexity
+- [ ] One concept at a time (low cognitive load)
+- [ ] Questions force engagement
+- [ ] Success checkpoints provide motivation
+- [ ] Explains "why" not just "how"
+
+---
+
+## **Example Application: Creating I2C Driver Guide**
+
+**Module:** I2C driver (complex: 7-state machine, interrupts, guard timers)
+
+### **Step 1: Analyze**
+
+**Core functions identified:**
+1. `i2c_init()` - Initialize state structure
+2. `i2c_start()` - Enable interrupts, get guard timer
+3. `i2c_reserve()` / `i2c_release()` - Resource management
+4. `i2c_write()` / `i2c_read()` - Public APIs
+5. `i2c_get_op_status()` - Status polling
+6. `i2c_interrupt()` - THE HEART (interrupt handler)
+7. Helper functions: `start_op()`, `op_stop_success()`, `op_stop_fail()`
+
+**Build order:**
+1. Big Picture: 7-state machine, interrupt-driven
+2. Simple pieces: reserve/release (just boolean flag)
+3. Medium pieces: write/read (start operation)
+4. Complex piece: interrupt handler (state machine logic)
+
+---
+
+### **Step 2: Create Guide Skeleton**
+
+```markdown
+# I2C Driver Progressive Reconstruction Guide
+
+## **Phase 0: Big Picture (1 hour)**
+
+Study entire i2c.c and:
+1. Draw 7-state state machine
+2. Trace write operation: START → ADDR → DATA → STOP
+3. Trace read operation: START → ADDR → DATA (with ACK/NACK)
+4. Understand interrupt flow
+
+Deliverable: Can you explain "How does a 2-byte write work?"
+
+---
+
+## **Phase 1: Resource Management (1 hour)**
+
+### **Function 1: i2c_reserve() - Why Essential?**
+
+Purpose: Get exclusive access to shared I2C bus
+
+Why essential:
+- Prevents multiple modules from using I2C simultaneously
+- Simple honor-based system (boolean flag)
+- No reservation = bus conflicts = corrupted data
+
+What to fill in:
+```c
+int32_t i2c_reserve(enum i2c_instance_id id)
+{
+    // Question: How do you check if already reserved?
+    if (st[id].reserved) {
+        return ???;  // What error means "already in use"?
+    }
+    
+    // Question: How do you mark it as reserved?
+    st[id].reserved = ???;  // True or false?
+    return 0;
+}
+```
+
+Guiding Questions:
+1. **What if you don't check if reserved?**
+   - Two modules could write at same time
+   - Result: Garbage on I2C bus!
+
+2. **Why boolean flag (not counting references)?**
+   - Simpler is better for MVP
+   - Honor system works if modules behave
+
+Critical Thinking:
+- "What happens if a module reserves but crashes before releasing?"
+- "How would you detect this in production?" (Watchdog!)
+
+Test Your Understanding:
+"If module A reserves I2C, can module B reserve it? (No!)"
+
+[Continue for each function...]
+```
+
+---
+
+### **Step 3: Break Complex Functions into Sub-Guides**
+
+**For the interrupt handler (i2c_interrupt), create:**
+
+```markdown
+## **Function 6: i2c_interrupt() - The Heart**
+
+**This is COMPLEX - build it state-by-state!**
+
+### **Sub-Part A: STATE_MSTR_WR_GEN_START**
+
+Study JUST this state in reference (10 min)
+Build JUST this state (20 min)
+Test: Does START condition generate?
+Check: Compare to reference NOW
+
+### **Sub-Part B: STATE_MSTR_WR_SENDING_ADDR**
+[Repeat pattern]
+
+... [One sub-guide per state]
+```
+
+**Break complex pieces into manageable chunks!**
+
+---
+
+## **Common Guide Patterns**
+
+### **Pattern 1: Configuration Function**
+
+```markdown
+### **Function: get_def_cfg()**
+
+```c
+int32_t module_get_def_cfg(struct module_cfg* cfg)
+{
+    // For each config field, ask:
+    // Question: What value for [field]?
+    cfg->field1 = ???;  // Hint: [Where to find value]
+    cfg->field2 = ???;  // Hint: [Default or from spec]
+    return 0;
+}
+```
+
+Critical: Explain WHERE values come from (datasheet, hardware, design choice)
+```
+
+---
+
+### **Pattern 2: State Machine State**
+
+```markdown
+### **STATE_XXX: [What It Does]**
+
+```c
+case STATE_XXX:
+    // Step 1: [Action]
+    // Question: [Decision to make]
+    rc = function(???);
+    
+    if (rc == 0) {
+        // Success path
+        st.state = STATE_YYY;  // Move forward
+    } else {
+        // Error path
+        // Question: What MUST you do?
+        // Hint: Did you acquire resources? Clean them up!
+        ???;
+        st.state = STATE_ZZZ;  // Error recovery state
+    }
+    break;
+```
+
+Critical Thinking:
+- "What if you skip the error path?"
+- "What resources need cleanup?"
+```
+
+---
+
+### **Pattern 3: Helper Algorithm**
+
+```markdown
+### **Function: crc8() - Data Validation**
+
+**This is a pure algorithm - I'll give you this one:**
+
+```c
+static uint8_t crc8(const uint8_t *data, int len)
+{
+    const uint8_t polynomial = 0x31;  // ← From [Datasheet Sec X]
+    uint8_t crc = 0xFF;                // ← Initial value
+    // [Complete implementation]
+    return crc;
+}
+```
+
+Why not make you build it:
+- It's math from specification, not embedded concept
+- Understanding CRC theory is separate topic
+- Focus: How to USE it, not implement it
+
+How to test:
+- Datasheet test vector: [input] → [expected output]
+```
+
+---
+
+## **Guide Quality Checklist**
+
+**Before publishing a guide, verify:**
+
+### **Learning Effectiveness:**
+- [ ] Can learner see big picture in first hour?
+- [ ] Is each step small enough (30-60 min max)?
+- [ ] Are there 5+ feedback checkpoints?
+- [ ] Does it avoid overwhelming with theory?
+- [ ] Does it connect to existing knowledge?
+
+### **Content Quality:**
+- [ ] Questions guide without giving answers
+- [ ] Hints point to resources, not solutions
+- [ ] Critical thinking prompts included
+- [ ] Pitfalls from real experience noted
+- [ ] Code skeletons are minimal but complete
+
+### **Practicality:**
+- [ ] Build order follows dependencies
+- [ ] Each piece can be tested independently
+- [ ] Troubleshooting section exists
+- [ ] Time estimates are realistic
+- [ ] Success criteria are clear
+
+---
+
+## **Meta-Guide Usage Instructions**
+
+### **For Future Cursor AI Sessions:**
+
+When asked to create a guide for a new module:
+
+**Step-by-Step Process:**
+
+1. **Identify patterns** (Step 0 in workflow)
+   - Which of the 17 Essential Code Patterns does this module use?
+   - List them for inclusion at guide start
+
+2. **Read this section** (Progressive_Reconstruction.md Part 2)
+   - Review guide creation principles
+   - Review template structure
+
+3. **Create guide structure:**
+   - **First:** Include relevant patterns from "Essential Code Patterns" section
+   - **Then:** Follow complete guide template
+   - **Apply:** All 7 principles (Balance, Questions, Just-in-Time, etc.)
+
+4. **Use the patterns** (Reference in questions)
+   - "Using Pattern X (see above), fill in..."
+   - Combine patterns when needed
+
+5. **Check quality** (Use guide quality checklist)
+   - All checkboxes satisfied?
+
+### **Critical First Step:**
+
+⚠️ **ALWAYS start guide with "Essential Patterns Used" section!**
+
+Example:
+```markdown
+## **Essential Patterns Used in This Module**
+
+This module uses:
+- Pattern 1: State Machine Skeleton
+- Pattern 2: Non-Blocking I2C Operations  
+- Pattern 7: CRC Validation
+
+Review these patterns before proceeding!
+```
+
+**Why:** Learner needs to know the building blocks BEFORE trying to use them!
+
+---
+
+### **Key Directives:**
+
+✅ **DO:**
+- **Start with relevant patterns** from Essential Code Patterns section
+- Create questions that guide thinking
+- Provide hints pointing to resources
+- Break complex parts into sub-guides
+- Include checkpoints after each piece
+- Explain "why essential" for each part
+- Use code skeletons with ??? blanks
+- Reference patterns by number ("Using Pattern 2...")
+
+❌ **DON'T:**
+- Give direct answers (defeats discovery)
+- Present all functions at once (overwhelming)
+- Skip "why" explanations (no context)
+- Forget error handling paths
+- Omit critical thinking prompts
+- Assume learner knows the patterns (show them first!)
+
+---
+
+## **Success Metrics**
+
+**A good guide enables the learner to:**
+
+1. ✅ See big picture within 1 hour
+2. ✅ Build working code incrementally (not all at once)
+3. ✅ Get feedback every 30-60 minutes
+4. ✅ Understand WHY (not just copy)
+5. ✅ Catch mistakes within minutes (not days)
+6. ✅ Rebuild from scratch confidently after completing
+7. ✅ Explain design decisions to others
+
+**If learner can do all 7 → Guide succeeded!**
+
+---
+
+## **Examples of Good vs Bad Guides**
+
+### **Bad Guide Example:**
+
+```markdown
+# Module XYZ Guide
+
+Study the code, then implement these functions:
+- init()
+- start()
+- run()
+- get_data()
+
+Compare to reference when done.
+```
+
+**Why it fails:** No structure, no questions, no guidance, delayed feedback
+
+---
+
+### **Good Guide Example (TMPHM Pattern):**
+
+```markdown
+# Module XYZ Guide
+
+## Phase 0: Big Picture (1 hr)
+[Architecture overview, diagrams]
+
+## Function 1: init() - Why Essential?
+Purpose: [Clear statement]
+Why: [3 reasons]
+
+What to fill in:
+```c
+int32_t xyz_init(cfg) {
+    // Question 1: [Specific decision]
+    // Hint: [Where to look]
+    ??? = ???;
+}
+```
+
+Questions:
+1. Why zero structure? (Consequence of not doing it)
+2. Where save cfg? (Used later where?)
+
+Checkpoint:
+- Compiles? Can explain? → Move to Function 2
+
+## Function 2: start()...
+[Repeat pattern]
+```
+
+**Why it works:** Structure, questions, tight feedback loops!
+
+---
+
+## **Customization for Different Module Types**
+
+### **For State Machines (I2C, TMPHM, Protocol Handlers):**
+- Emphasize state diagrams
+- Build states in execution order
+- Questions about transitions and error paths
+
+### **For Data Processors (CRC, Conversion, Parsing):**
+- Focus on algorithm understanding
+- Provide test vectors
+- Emphasize validation
+
+### **For Interrupt Handlers (UART, Timers, DMA):**
+- Explain hardware events
+- Focus on non-blocking patterns
+- Highlight race conditions
+
+### **For Configuration Modules (Clocks, GPIO, Peripherals):**
+- Connect to hardware reference manual
+- Explain register settings
+- Include sanity checks
+
+---
+
+## **Final Notes**
+
+### **The Goal:**
+
+Create guides that enable **Progressive Reconstruction** (Option 4):
+- Small batches (one function at a time)
+- Fast feedback (30-60 min cycles)
+- Guided discovery (questions, not answers)
+- Working code at each step
+
+### **The Outcome:**
+
+Learner who can:
+- ✅ Build the module independently
+- ✅ Understand design decisions
+- ✅ Explain it to others
+- ✅ Apply patterns to new modules
+
+**Not just "working code" but "transferable skill"!**
+
+---
+
+**This meta-guide documents how to create guides like the TMPHM guide that worked so well. Reference it for all future learning modules!** 🎯
+
