@@ -209,7 +209,7 @@ Draw the state flow on paper or whiteboard:
                                                             |
                                                       read complete
                                                             |
-                                                   validate CRC, convert
+                       llvalidate CRC, convert
                                                             |
                                                          [IDLE]
 ```
