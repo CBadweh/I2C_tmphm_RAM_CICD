@@ -53,9 +53,6 @@
 // Common macros
 ////////////////////////////////////////////////////////////////////////////////
 
-#define CONSOLE_DFLT_TTYS_INSTANCE \
-    CONCAT_X_TOKEN(TTYS_INSTANCE_UART, CONFIG_CONSOLE_DFLT_TTYS_INSTANCE)
-
 #define PROMPT "> "
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -82,7 +79,7 @@ struct console_state {
 // very early after boot.
 
 static struct console_state state = {
-    .cfg.ttys_instance_id = CONSOLE_DFLT_TTYS_INSTANCE,
+    .cfg.ttys_instance_id = CONFIG_CONSOLE_DFLT_TTYS_INSTANCE,
 };
 
 static int32_t log_level = LOG_DEFAULT;
@@ -108,7 +105,7 @@ int32_t console_get_def_cfg(struct console_cfg* cfg)
         return MOD_ERR_ARG;
 
     memset(cfg, 0, sizeof(*cfg));
-    cfg->ttys_instance_id = CONSOLE_DFLT_TTYS_INSTANCE;
+    cfg->ttys_instance_id = CONFIG_CONSOLE_DFLT_TTYS_INSTANCE;
     return 0;
 }
 

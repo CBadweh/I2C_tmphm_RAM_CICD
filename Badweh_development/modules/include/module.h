@@ -42,6 +42,10 @@
 #define MOD_ERR_NOT_RESERVED -8
 #define MOD_ERR_OP_IN_PROG   -9
 #define MOD_ERR_UNAVAIL      -10
+#define MOD_ERR_INTERNAL     -11
+#define MOD_ERR_IMPL         -12
+#define MOD_ERR_INFEASIBLE   -13
+#define MOD_ERR_BUSY         -14
 
 // Magic numbers for data structures in flash/RAM
 #define MOD_MAGIC_FAULT 0xdead0001

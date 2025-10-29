@@ -31,6 +31,8 @@ modules/blinky \
 modules/cmd \
 modules/console \
 modules/dio \
+modules/fault \
+modules/flash \
 modules/gps_gtu7 \
 modules/i2c \
 modules/log \
@@ -40,4 +42,5 @@ modules/stat \
 modules/tmphm \
 modules/tmr \
 modules/ttys \
+modules/wdg \
 

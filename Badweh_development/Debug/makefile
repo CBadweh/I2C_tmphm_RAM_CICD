@@ -9,6 +9,7 @@ RM := rm -rf
 
 # All of the sources participating in the build are defined here
 -include sources.mk
+-include modules/wdg/subdir.mk
 -include modules/ttys/subdir.mk
 -include modules/tmr/subdir.mk
 -include modules/tmphm/subdir.mk
@@ -18,6 +19,8 @@ RM := rm -rf
 -include modules/log/subdir.mk
 -include modules/i2c/subdir.mk
 -include modules/gps_gtu7/subdir.mk
+-include modules/flash/subdir.mk
+-include modules/fault/subdir.mk
 -include modules/dio/subdir.mk
 -include modules/console/subdir.mk
 -include modules/cmd/subdir.mk

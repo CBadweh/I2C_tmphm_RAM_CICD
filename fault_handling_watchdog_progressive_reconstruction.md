@@ -196,7 +196,7 @@ int32_t wdg_start(void)
     // Question 2: Get a periodic timer
     // Hint: Pattern 3 - Periodic Timer with Callback
     // Think: Timer fires every CONFIG_WDG_RUN_CHECK_MS, calls wdg_tmr_cb
-    rc = tmr_inst_get_cb(???, wdg_tmr_cb, 0, TMR_CNTX_BASE_LEVEL);
+    rc = tmr_inst_get_cb(???, wdg_tmr_cb, 0);
     if (rc < 0) {
         log_error("wdg_start: tmr error %d\n", rc);
         goto exit;

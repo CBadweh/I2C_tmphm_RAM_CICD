@@ -89,7 +89,7 @@ static int32_t cmd_wdg_test(int32_t argc, const char** argv);
 // Private (static) variables
 ////////////////////////////////////////////////////////////////////////////////
 
-struct wdg_state state;
+static struct wdg_state state;
 
 static int32_t log_level = LOG_DEFAULT;
 
@@ -163,7 +163,7 @@ int32_t wdg_start(void)
     }
 
     rc = tmr_inst_get_cb(CONFIG_WDG_RUN_CHECK_MS,
-                         wdg_tmr_cb, 0, TMR_CNTX_BASE_LEVEL);
+                         wdg_tmr_cb, 0);
     if (rc < 0) {
         log_error("wdg_start: tmr error %d\n", rc);
         goto exit;
@@ -511,3 +511,4 @@ static int32_t cmd_wdg_test(int32_t argc, const char** argv)
     }
     return 0;
 }
+

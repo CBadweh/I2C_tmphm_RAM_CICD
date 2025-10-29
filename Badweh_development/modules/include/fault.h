@@ -1,8 +1,8 @@
-#ifndef _CONSOLE_H_
-#define _CONSOLE_H_
+#ifndef _FAULT_H_
+#define _FAULT_H_
 
 /*
- * @brief Interface declaration of console module.
+ * @brief Interface declaration of fault module.
  *
  * See implementation file for information about this module.
  *
@@ -29,33 +29,41 @@
  * SOFTWARE.
  */
 
-#include <stdarg.h>
 #include <stdint.h>
 
-#include "ttys.h"
+////////////////////////////////////////////////////////////////////////////////
+// Common macros
+////////////////////////////////////////////////////////////////////////////////
 
-struct console_cfg
-{
-    enum ttys_instance_id ttys_instance_id;
+////////////////////////////////////////////////////////////////////////////////
+// Type definitions
+////////////////////////////////////////////////////////////////////////////////
+
+enum fault_type {
+    FAULT_TYPE_WDG = 1,
+    FAULT_TYPE_EXCEPTION,
 };
 
+struct fault_cfg
+{
+    // FUTURE.
+};
+
+////////////////////////////////////////////////////////////////////////////////
+// Public (global) externs
+////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////////
+// Public (global) function declarations
+////////////////////////////////////////////////////////////////////////////////
+
 // Core module interface functions.
-int32_t console_get_def_cfg(struct console_cfg* cfg);
-int32_t console_init(struct console_cfg* cfg);;
-int32_t console_run(void);
+int32_t fault_init(struct fault_cfg* cfg);
+int32_t fault_start(void);
 
 // Other APIs.
-int32_t console_data_print(uint8_t* data_ptr, uint32_t num_bytes);
-int	printc(const char* fmt, ...)
-    __attribute__((__format__ (__printf__, 1, 2)));
-int	vprintc(const char* fmt, va_list args);
-void printc_float(const char* prefix, float f, uint32_t max_frac_width,
-                  const char* suffix);
-int32_t console_tx_idle(void);
+void fault_detected(enum fault_type type, uint32_t fault_param);
+void fault_exception_handler(uint32_t sp);
+uint32_t fault_get_rcc_csr(void);
 
-#if CONFIG_FAULT_PRESENT
-int printc_panic(const char* fmt, ...)
-    __attribute__((__format__ (__printf__, 1, 2)));
-#endif
-
-#endif // _CONSOLE_H_
+#endif // _FAULT_H_

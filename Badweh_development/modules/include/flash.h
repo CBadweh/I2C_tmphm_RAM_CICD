@@ -1,8 +1,8 @@
-#ifndef _CONSOLE_H_
-#define _CONSOLE_H_
+#ifndef _FLASH_H_
+#define _FLASH_H_
 
 /*
- * @brief Interface declaration of console module.
+ * @brief Interface declaration of flash module.
  *
  * See implementation file for information about this module.
  *
@@ -29,33 +29,31 @@
  * SOFTWARE.
  */
 
-#include <stdarg.h>
 #include <stdint.h>
 
-#include "ttys.h"
+////////////////////////////////////////////////////////////////////////////////
+// Common macros
+////////////////////////////////////////////////////////////////////////////////
 
-struct console_cfg
-{
-    enum ttys_instance_id ttys_instance_id;
-};
+////////////////////////////////////////////////////////////////////////////////
+// Type definitions
+////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////////
+// Public (global) externs
+////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////////
+// Public (global) function declarations
+////////////////////////////////////////////////////////////////////////////////
 
 // Core module interface functions.
-int32_t console_get_def_cfg(struct console_cfg* cfg);
-int32_t console_init(struct console_cfg* cfg);;
-int32_t console_run(void);
+int32_t flash_start(void);
 
 // Other APIs.
-int32_t console_data_print(uint8_t* data_ptr, uint32_t num_bytes);
-int	printc(const char* fmt, ...)
-    __attribute__((__format__ (__printf__, 1, 2)));
-int	vprintc(const char* fmt, va_list args);
-void printc_float(const char* prefix, float f, uint32_t max_frac_width,
-                  const char* suffix);
-int32_t console_tx_idle(void);
+int32_t flash_panic_erase_page(uint32_t* start_addr);
+int32_t flash_panic_write(uint32_t* flash_addr, uint32_t* data,
+                          uint32_t data_len);
 
-#if CONFIG_FAULT_PRESENT
-int printc_panic(const char* fmt, ...)
-    __attribute__((__format__ (__printf__, 1, 2)));
-#endif
+#endif // _FLASH_H_
 
-#endif // _CONSOLE_H_

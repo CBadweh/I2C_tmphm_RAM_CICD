@@ -16,6 +16,8 @@
 "./modules/cmd/cmd.o"
 "./modules/console/console.o"
 "./modules/dio/dio.o"
+"./modules/fault/fault.o"
+"./modules/flash/flash.o"
 "./modules/gps_gtu7/gps_gtu7.o"
 "./modules/i2c/i2c.o"
 "./modules/log/log.o"
@@ -25,3 +27,4 @@
 "./modules/tmphm/tmphm.o"
 "./modules/tmr/tmr.o"
 "./modules/ttys/ttys.o"
+"./modules/wdg/wdg.o"
