@@ -1,6 +1,3 @@
----
-alwaysApply: false
----
 # Cursor AI Rule: Embedded C Call Graph Generator
 
 ## Purpose
@@ -88,14 +85,18 @@ flowchart LR
 
 ## Styling Rules
 
+**IMPORTANT: Use dark backgrounds with light text for readability**
+
 **Color Assignment:**
-- **Chain 1** (Critical/Init): Red (`fill:#ffcccc,stroke:#cc0000`)
-- **Chain 2** (Normal/Process): Blue (`fill:#ccddff,stroke:#0066cc`)
-- **Chain 3** (Periodic): Green (`fill:#ccffcc,stroke:#00cc00`)
-- **Chain 4** (Error/Handler): Orange (`fill:#ffddaa,stroke:#ff8800`)
-- **Chain 5** (Optional): Gray (`fill:#f0f0f0,stroke:#666666`)
+- **Chain 1** (Critical/Init): Red (`fill:#cc3333,stroke:#ff6666,stroke-width:2px,color:#fff`)
+- **Chain 2** (Normal/Process): Blue (`fill:#3366cc,stroke:#6699ff,stroke-width:2px,color:#fff`)
+- **Chain 3** (Periodic): Green (`fill:#339933,stroke:#66cc66,stroke-width:2px,color:#fff`)
+- **Chain 4** (Error/Handler): Orange (`fill:#cc6600,stroke:#ff9933,stroke-width:2px,color:#fff`)
+- **Chain 5** (Optional): Gray (`fill:#666666,stroke:#999999,stroke-width:2px,color:#fff`)
 
 **Apply same style to ALL functions in a call chain** - from caller to final callee.
+
+**Text color:** Always include `color:#fff` (white text) in every classDef for dark mode compatibility.
 
 ## Arrow Styling
 
@@ -151,11 +152,11 @@ flowchart LR
     main_func --> drv_read
     
     %% Chain 1: Initialization (red)
-    classDef chain1 fill:#ffcccc,stroke:#cc0000,stroke-width:2px
+    classDef chain1 fill:#cc3333,stroke:#ff6666,stroke-width:2px,color:#fff
     class main_func,init_sys,drv_init chain1
     
     %% Chain 2: Normal operation (blue)
-    classDef chain2 fill:#ccddff,stroke:#0066cc,stroke-width:2px
+    classDef chain2 fill:#3366cc,stroke:#6699ff,stroke-width:2px,color:#fff
     class drv_read chain2
 ```
 
