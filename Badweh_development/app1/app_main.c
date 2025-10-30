@@ -44,6 +44,10 @@
 #include "stat.h"        // Statistics
 #include "log.h"         // Logging macros
 
+// Day 4: Fault Handling and Watchdog
+#include "fault.h"       // Fault detection and handling
+#include "wdg.h"         // Watchdog protection
+
 // Removed (not needed for Day 3):
 // #include "blinky.h"   - Visual indicator, not critical
 // #include "gps_gtu7.h" - GPS module, unrelated to sensor
@@ -216,6 +220,9 @@ void app_main(void)
     tmphm_get_def_cfg(TMPHM_INSTANCE_1, &tmphm_cfg);
     tmphm_cfg.i2c_instance_id = I2C_INSTANCE_3;  // Tell TMPHM to use I2C bus 3
     tmphm_init(TMPHM_INSTANCE_1, &tmphm_cfg);
+
+    fault_init(NULL);     // Line ~219
+    wdg_init(NULL);       // Line ~220
 
     // ===== START PHASE: Enable modules for operation =====
     printc("\n[START] Starting modules...\n");

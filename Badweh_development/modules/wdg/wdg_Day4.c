@@ -143,7 +143,7 @@ int32_t wdg_init(struct wdg_cfg* cfg)
 {
     // TODO: Follow fault_handling_watchdog_progressive_reconstruction.md
     // Function 1: wdg_init()
-	memset(&state, 0, sizeof(state));
+    
     return 0;
 }
 
@@ -161,17 +161,17 @@ int32_t wdg_start(void)
     // TODO: Follow fault_handling_watchdog_progressive_reconstruction.md
     // Function 2: wdg_start()
     
-     rc = cmd_register(&cmd_info);
-     if (rc < 0) {
-         log_error("wdg_start: cmd error %d\n", rc);
-         goto exit;
-     }
-
-     rc = tmr_inst_get_cb(CONFIG_WDG_RUN_CHECK_MS, wdg_tmr_cb, 0);
-     if (rc < 0) {
-         log_error("wdg_start: tmr error %d\n", rc);
-         goto exit;
-     }
+    // rc = ???(&cmd_info);
+    // if (rc < 0) {
+    //     log_error("wdg_start: cmd error %d\n", rc);
+    //     goto exit;
+    // }
+    //
+    // rc = tmr_inst_get_cb(???, wdg_tmr_cb, 0);
+    // if (rc < 0) {
+    //     log_error("wdg_start: tmr error %d\n", rc);
+    //     goto exit;
+    // }
 
 exit:
     return rc;
@@ -187,23 +187,8 @@ exit:
  */
 int32_t wdg_register(uint32_t wdg_id, uint32_t period_ms)
 {
-    struct soft_wdg* soft_wdg;
-
-    // Question 1: Validate watchdog ID
-    // Hint: Can't exceed CONFIG_WDG_NUM_WDGS
-    // Think: Array bounds check
-    if (wdg_id >= CONFIG_WDG_NUM_WDGS)
-        return MOD_ERR_ARG;
-
-    // Question 2: Get pointer to this watchdog's state
-    // Hint: Array access using wdg_id
-    soft_wdg = &state.soft_wdgs[wdg_id];
-
-    // Question 3: Initialize the watchdog
-    // Hint: Need to set two fields: period and last_feed_time
-    // Think: period is the timeout, last_feed_time starts at "now"
-    soft_wdg->last_feed_time_ms = tmr_get_ms();
-    soft_wdg->period_ms = period_ms;
+    // TODO: Follow fault_handling_watchdog_progressive_reconstruction.md
+    // Function 3: wdg_register()
     
     return 0;
 }
@@ -217,15 +202,8 @@ int32_t wdg_register(uint32_t wdg_id, uint32_t period_ms)
  */
 int32_t wdg_feed(uint32_t wdg_id)
 {
-    // Question 1: Validate watchdog ID (same as register)
-    // Think: Can't feed non-existent watchdog
-    if (wdg_id >= CONFIG_WDG_NUM_WDGS)
-        return MOD_ERR_ARG;
-
-    // Question 2: Update last feed time
-    // Hint: Record that this watchdog was just fed
-    // Think: Same function as in register for getting current time
-    state.soft_wdgs[wdg_id].last_feed_time_ms = tmr_get_ms();
+    // TODO: Follow fault_handling_watchdog_progressive_reconstruction.md
+    // Function 4: wdg_feed()
     
     return 0;
 }
@@ -254,17 +232,7 @@ int32_t wdg_register_triggered_cb(wdg_triggered_cb triggered_cb)
  */
 void wdg_start_init_hdw_wdg(void)
 {
-    validate_no_init_vars();
-
-    if ((fault_get_rcc_csr() & RCC_CSR_IWDGRSTF_Msk) == 0) {
-        no_init_vars.consec_failed_init_ctr = 0;
-    }
-    if (no_init_vars.consec_failed_init_ctr < CONFIG_WDG_MAX_INIT_FAILS ||
-        CONFIG_WDG_MAX_INIT_FAILS == 0) {
-        wdg_start_hdw_wdg(CONFIG_WDG_INIT_TIMEOUT_MS);
-    }
-    no_init_vars.consec_failed_init_ctr++;
-    update_no_init_vars();
+    // TODO: Implement initialization watchdog
 }
 
 /*
@@ -275,9 +243,7 @@ void wdg_start_init_hdw_wdg(void)
  */
 void wdg_init_successful(void)
 {
-    validate_no_init_vars();
-    no_init_vars.consec_failed_init_ctr = 0;
-    update_no_init_vars();
+    // TODO: Implement successful initialization tracking
 }
 
 /*
@@ -303,45 +269,11 @@ void wdg_init_successful(void)
  */
 int32_t wdg_start_hdw_wdg(uint32_t timeout_ms)
 {
-    int32_t ctr;
-
-    // Hardware-specific macros (given in reference)
-    #define SANITY_CTR_LIMIT 1000000
-    #define LSI_FREQ_HZ 32000
-    #define WDG_PRESCALE 64
-    #define WDG_PRESCALE_SETTING LL_IWDG_PRESCALER_64
-    #define WDG_CLK_FREQ_HZ (LSI_FREQ_HZ/WDG_PRESCALE)
-    #define WDG_MAX_RL 0xfff
-    #define MS_PER_SEC 1000
-    #define WDG_MS_TO_RL(ms) \
-        (((ms) * WDG_CLK_FREQ_HZ + MS_PER_SEC/2)/MS_PER_SEC - 1)
-
-    // Question 1: Convert timeout to hardware reload value
-    // Hint: Hardware counts differently than milliseconds
-    // Think: Use the macro to convert
-    ctr = WDG_MS_TO_RL(timeout_ms);
-    if (ctr < 0)
-        ctr = 0;
-    else if (ctr > WDG_MAX_RL)
-        return MOD_ERR_ARG;
-
-    // Question 2: Enable hardware watchdog
-    // Hint: Look at LL_IWDG functions
-    LL_IWDG_Enable(IWDG);
-    LL_IWDG_EnableWriteAccess(IWDG);
-    LL_IWDG_SetPrescaler(IWDG, WDG_PRESCALE_SETTING);
-    LL_IWDG_SetReloadCounter(IWDG, ctr);
-
-    // Wait for hardware to be ready (poll)
-    for (ctr = 0; ctr < SANITY_CTR_LIMIT; ctr++) {
-        if (LL_IWDG_IsReady(IWDG))
-            break;
-    }
-    if (ctr >= SANITY_CTR_LIMIT)
-        return MOD_ERR_PERIPH;
-
-    return 0;
+    // TODO: Follow fault_handling_watchdog_progressive_reconstruction.md
+    // Function 6: wdg_start_hdw_wdg()
+    // This is complex hardware-specific code - will provide reference implementation
     
+    return 0;
 }
 
 /*
@@ -372,43 +304,25 @@ void wdg_feed_hdw(void)
  * - The timer service (at least BASE_LEVEL timers).
  * - The superloop, since BASE_LEVEL timers are called from the super loop.
  */
-static enum tmr_cb_action wdg_tmr_cb(int32_t tmr_id, uint32_t user_data)
+static enum tmr_cb_action wdg_tmr_cb(int32_t tmr_id,
+                                     uint32_t user_data)
 {
-    uint32_t idx;
-    bool wdg_triggered = false;
-    uint32_t now_ms;
-
-    // Question 1: Get current time (for comparison)
-    // Hint: Same function used before
-    now_ms = tmr_get_ms();
-
-    // Question 2: Check each software watchdog
-    // Hint: Loop through state.soft_wdgs array
-    // Think: For each watchdog, check if (now - last_feed) > period
-    for (idx = 0; idx < CONFIG_WDG_NUM_WDGS; idx++) {
-        // Question 2a: Calculate how long since last feed
-        // Think: now_ms - last_feed_time
-        if (now_ms - state.soft_wdgs[idx].last_feed_time_ms >
-            state.soft_wdgs[idx].period_ms) {
-            // Question 2b: Watchdog timed out - notify
-            // Hint: Call the registered callback
-            // Think: state.triggered_cb is the function pointer
-            wdg_triggered = true;
-            if (state.triggered_cb != NULL) {
-                state.triggered_cb(idx);
-            }
-            break;  // Only trigger once per check cycle
-        }
-    }
-
-    // Question 3: Feed hardware watchdog if no software watchdogs triggered
-    // Hint: Only if all software watchdogs are OK
-    // Think: If no timeout, hardware is being fed properly
-    if (!wdg_triggered) {
-    	wdg_feed_hdw();
-    }
-
-    return TMR_CB_RESTART;  // Keep firing periodically
+    // TODO: Follow fault_handling_watchdog_progressive_reconstruction.md
+    // Function 5: wdg_tmr_cb() - THE HEART
+    // This is the most important function!
+    
+    // uint32_t idx;
+    // bool wdg_triggered = false;
+    // uint32_t now_ms;
+    //
+    // Get current time
+    // Check each watchdog for timeout
+    // If timeout, call callback
+    // Feed hardware watchdog if no timeouts
+    
+    wdg_feed_hdw();  // Placeholder - feed HW watchdog for now
+    
+    return TMR_CB_RESTART;
 }
 
 /*
@@ -416,23 +330,7 @@ static enum tmr_cb_action wdg_tmr_cb(int32_t tmr_id, uint32_t user_data)
  */
 static void validate_no_init_vars(void)
 {
-    static const uint32_t num_u32_to_check =
-        sizeof(struct wdg_no_init_vars)/sizeof(uint32_t) - 1;
-    uint32_t idx;
-    uint32_t new_check = 0xBAADCEED;
-
-    for (idx = 0; idx < num_u32_to_check; idx++) {
-        new_check = ((new_check << 1) | (new_check >> 31)) ^
-            ((uint32_t*)&no_init_vars)[idx];
-    }
-
-    if (no_init_vars.magic != WDG_NO_INIT_VARS_MAGIC ||
-        no_init_vars.check != new_check)
-    {
-        memset(&no_init_vars, 0, sizeof(no_init_vars));
-        no_init_vars.magic = WDG_NO_INIT_VARS_MAGIC;
-        no_init_vars.check = new_check;
-    }
+    // TODO: Implement validation logic
 }
 
 /*
@@ -440,16 +338,7 @@ static void validate_no_init_vars(void)
  */
 static void update_no_init_vars(void)
 {
-    static const uint32_t num_u32_to_check =
-        sizeof(struct wdg_no_init_vars)/sizeof(uint32_t) - 1;
-    uint32_t idx;
-    uint32_t new_check = 0xBAADCEED;
-
-    for (idx = 0; idx < num_u32_to_check; idx++) {
-        new_check = ((new_check << 1) | (new_check >> 31)) ^
-            ((uint32_t*)&no_init_vars)[idx];
-    }
-    no_init_vars.check = new_check;
+    // TODO: Implement check value update
 }
 
 /*

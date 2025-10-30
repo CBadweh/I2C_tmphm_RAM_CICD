@@ -1,5 +1,5 @@
 /*
- * @brief Implementation of wdg module - STARTING SKELETON
+ * @brief Implementation of wdg module.
  *
  * This module provides a watchdog service. It supports a configurable number
  * of software-based watchdogs. A hardware-based watchdog is used to verify the
@@ -141,9 +141,7 @@ struct wdg_no_init_vars no_init_vars __attribute__((section (".no.init.vars")));
  */
 int32_t wdg_init(struct wdg_cfg* cfg)
 {
-    // TODO: Follow fault_handling_watchdog_progressive_reconstruction.md
-    // Function 1: wdg_init()
-	memset(&state, 0, sizeof(state));
+    memset(&state, 0, sizeof(state));
     return 0;
 }
 
@@ -158,20 +156,18 @@ int32_t wdg_start(void)
 {
     int32_t rc;
 
-    // TODO: Follow fault_handling_watchdog_progressive_reconstruction.md
-    // Function 2: wdg_start()
-    
-     rc = cmd_register(&cmd_info);
-     if (rc < 0) {
-         log_error("wdg_start: cmd error %d\n", rc);
-         goto exit;
-     }
+    rc = cmd_register(&cmd_info);
+    if (rc < 0) {
+        log_error("wdg_start: cmd error %d\n", rc);
+        goto exit;
+    }
 
-     rc = tmr_inst_get_cb(CONFIG_WDG_RUN_CHECK_MS, wdg_tmr_cb, 0);
-     if (rc < 0) {
-         log_error("wdg_start: tmr error %d\n", rc);
-         goto exit;
-     }
+    rc = tmr_inst_get_cb(CONFIG_WDG_RUN_CHECK_MS,
+                         wdg_tmr_cb, 0);
+    if (rc < 0) {
+        log_error("wdg_start: tmr error %d\n", rc);
+        goto exit;
+    }
 
 exit:
     return rc;
@@ -189,22 +185,13 @@ int32_t wdg_register(uint32_t wdg_id, uint32_t period_ms)
 {
     struct soft_wdg* soft_wdg;
 
-    // Question 1: Validate watchdog ID
-    // Hint: Can't exceed CONFIG_WDG_NUM_WDGS
-    // Think: Array bounds check
     if (wdg_id >= CONFIG_WDG_NUM_WDGS)
         return MOD_ERR_ARG;
 
-    // Question 2: Get pointer to this watchdog's state
-    // Hint: Array access using wdg_id
     soft_wdg = &state.soft_wdgs[wdg_id];
-
-    // Question 3: Initialize the watchdog
-    // Hint: Need to set two fields: period and last_feed_time
-    // Think: period is the timeout, last_feed_time starts at "now"
     soft_wdg->last_feed_time_ms = tmr_get_ms();
     soft_wdg->period_ms = period_ms;
-    
+
     return 0;
 }
 
@@ -217,16 +204,9 @@ int32_t wdg_register(uint32_t wdg_id, uint32_t period_ms)
  */
 int32_t wdg_feed(uint32_t wdg_id)
 {
-    // Question 1: Validate watchdog ID (same as register)
-    // Think: Can't feed non-existent watchdog
     if (wdg_id >= CONFIG_WDG_NUM_WDGS)
         return MOD_ERR_ARG;
-
-    // Question 2: Update last feed time
-    // Hint: Record that this watchdog was just fed
-    // Think: Same function as in register for getting current time
     state.soft_wdgs[wdg_id].last_feed_time_ms = tmr_get_ms();
-    
     return 0;
 }
 
@@ -237,7 +217,6 @@ int32_t wdg_feed(uint32_t wdg_id)
  */
 int32_t wdg_register_triggered_cb(wdg_triggered_cb triggered_cb)
 {
-    // TODO: Implement callback registration
     state.triggered_cb = triggered_cb;
     return 0;
 }
@@ -257,6 +236,7 @@ void wdg_start_init_hdw_wdg(void)
     validate_no_init_vars();
 
     if ((fault_get_rcc_csr() & RCC_CSR_IWDGRSTF_Msk) == 0) {
+        // Reset was not due to IWDG, so we reset the counter.
         no_init_vars.consec_failed_init_ctr = 0;
     }
     if (no_init_vars.consec_failed_init_ctr < CONFIG_WDG_MAX_INIT_FAILS ||
@@ -305,7 +285,6 @@ int32_t wdg_start_hdw_wdg(uint32_t timeout_ms)
 {
     int32_t ctr;
 
-    // Hardware-specific macros (given in reference)
     #define SANITY_CTR_LIMIT 1000000
     #define LSI_FREQ_HZ 32000
     #define WDG_PRESCALE 64
@@ -316,23 +295,20 @@ int32_t wdg_start_hdw_wdg(uint32_t timeout_ms)
     #define WDG_MS_TO_RL(ms) \
         (((ms) * WDG_CLK_FREQ_HZ + MS_PER_SEC/2)/MS_PER_SEC - 1)
 
-    // Question 1: Convert timeout to hardware reload value
-    // Hint: Hardware counts differently than milliseconds
-    // Think: Use the macro to convert
+    _Static_assert(CONFIG_WDG_HARD_TIMEOUT_MS <=
+                   ((WDG_MAX_RL + 1) * 1000) / WDG_CLK_FREQ_HZ,
+                   "Watchdog timeout too large");
+
     ctr = WDG_MS_TO_RL(timeout_ms);
     if (ctr < 0)
         ctr = 0;
     else if (ctr > WDG_MAX_RL)
         return MOD_ERR_ARG;
 
-    // Question 2: Enable hardware watchdog
-    // Hint: Look at LL_IWDG functions
     LL_IWDG_Enable(IWDG);
     LL_IWDG_EnableWriteAccess(IWDG);
-    LL_IWDG_SetPrescaler(IWDG, WDG_PRESCALE_SETTING);
+    LL_IWDG_SetPrescaler(IWDG, WDG_PRESCALE_SETTING); 
     LL_IWDG_SetReloadCounter(IWDG, ctr);
-
-    // Wait for hardware to be ready (poll)
     for (ctr = 0; ctr < SANITY_CTR_LIMIT; ctr++) {
         if (LL_IWDG_IsReady(IWDG))
             break;
@@ -340,8 +316,14 @@ int32_t wdg_start_hdw_wdg(uint32_t timeout_ms)
     if (ctr >= SANITY_CTR_LIMIT)
         return MOD_ERR_PERIPH;
 
+    // Stop the watchdog counter when the debugger stops the MCU.
+    #ifdef DBGMCU_APB1FZR1_DBG_IWDG_STOP_Msk
+        DBGMCU->APB1FZR1 |= DBGMCU_APB1FZR1_DBG_IWDG_STOP_Msk;
+    #elif defined DBGMCU_APB1_FZ_DBG_IWDG_STOP_Msk
+        DBGMCU->APB1FZ |= DBGMCU_APB1_FZ_DBG_IWDG_STOP_Msk;
+    #endif
+
     return 0;
-    
 }
 
 /*
@@ -372,43 +354,46 @@ void wdg_feed_hdw(void)
  * - The timer service (at least BASE_LEVEL timers).
  * - The superloop, since BASE_LEVEL timers are called from the super loop.
  */
-static enum tmr_cb_action wdg_tmr_cb(int32_t tmr_id, uint32_t user_data)
+
+static enum tmr_cb_action wdg_tmr_cb(int32_t tmr_id,
+                                     uint32_t user_data)
 {
-    uint32_t idx;
+    int32_t idx;
+    struct soft_wdg* soft_wdg;
     bool wdg_triggered = false;
-    uint32_t now_ms;
 
-    // Question 1: Get current time (for comparison)
-    // Hint: Same function used before
-    now_ms = tmr_get_ms();
+    if (test_cmd_disable_wdg) {
+        wdg_feed_hdw();
+        goto exit;
+    }
 
-    // Question 2: Check each software watchdog
-    // Hint: Loop through state.soft_wdgs array
-    // Think: For each watchdog, check if (now - last_feed) > period
-    for (idx = 0; idx < CONFIG_WDG_NUM_WDGS; idx++) {
-        // Question 2a: Calculate how long since last feed
-        // Think: now_ms - last_feed_time
-        if (now_ms - state.soft_wdgs[idx].last_feed_time_ms >
-            state.soft_wdgs[idx].period_ms) {
-            // Question 2b: Watchdog timed out - notify
-            // Hint: Call the registered callback
-            // Think: state.triggered_cb is the function pointer
-            wdg_triggered = true;
-            if (state.triggered_cb != NULL) {
-                state.triggered_cb(idx);
+    for (idx = 0, soft_wdg = &state.soft_wdgs[0];
+         idx < CONFIG_WDG_NUM_WDGS;
+         idx++, soft_wdg++)
+    {
+        if (soft_wdg->period_ms != 0) {
+
+            // We have to careful with race conditions, especially for
+            // watchdogs fed from interrupt handlers.
+
+            uint32_t last_feed_time_ms = soft_wdg->last_feed_time_ms;
+            if (tmr_get_ms() - last_feed_time_ms > soft_wdg->period_ms) {
+                wdg_triggered = true;
+                if (state.triggered_cb != NULL) {
+                    // This function will normally not return.
+                    state.triggered_cb(idx);
+                }
             }
-            break;  // Only trigger once per check cycle
         }
     }
 
-    // Question 3: Feed hardware watchdog if no software watchdogs triggered
-    // Hint: Only if all software watchdogs are OK
-    // Think: If no timeout, hardware is being fed properly
     if (!wdg_triggered) {
-    	wdg_feed_hdw();
+        if (!test_cmd_fail_hard_wdg)
+            wdg_feed_hdw();
     }
 
-    return TMR_CB_RESTART;  // Keep firing periodically
+exit:
+    return TMR_CB_RESTART;
 }
 
 /*
@@ -416,10 +401,10 @@ static enum tmr_cb_action wdg_tmr_cb(int32_t tmr_id, uint32_t user_data)
  */
 static void validate_no_init_vars(void)
 {
-    static const uint32_t num_u32_to_check =
+    static const uint32_t num_u32_to_check = 
         sizeof(struct wdg_no_init_vars)/sizeof(uint32_t) - 1;
     uint32_t idx;
-    uint32_t new_check = 0xBAADCEED;
+    uint32_t new_check = 0xBAADCEED; // Seed.
 
     for (idx = 0; idx < num_u32_to_check; idx++) {
         new_check = ((new_check << 1) | (new_check >> 31)) ^
@@ -440,10 +425,10 @@ static void validate_no_init_vars(void)
  */
 static void update_no_init_vars(void)
 {
-    static const uint32_t num_u32_to_check =
+    static const uint32_t num_u32_to_check = 
         sizeof(struct wdg_no_init_vars)/sizeof(uint32_t) - 1;
     uint32_t idx;
-    uint32_t new_check = 0xBAADCEED;
+    uint32_t new_check = 0xBAADCEED; // Seed.
 
     for (idx = 0; idx < num_u32_to_check; idx++) {
         new_check = ((new_check << 1) | (new_check >> 31)) ^
@@ -451,6 +436,7 @@ static void update_no_init_vars(void)
     }
     no_init_vars.check = new_check;
 }
+
 
 /*
  * @brief Console command function for "wdg status".
@@ -460,27 +446,25 @@ static void update_no_init_vars(void)
  *
  * @return 0 for success, else a "MOD_ERR" value. See code for details.
  *
- * Command usage: wdg status
+ * Command usage: wdg test [<op> [<arg>]]
  */
 static int32_t cmd_wdg_status(int32_t argc, const char** argv)
 {
     uint32_t id;
 
-    printc("Current time: %10lu\n", tmr_get_ms());
-    printc("Watchdog %s.\n",
+    printc("Current time: %10lu\nWatchdog %s.\n",
+           tmr_get_ms(),
            test_cmd_disable_wdg ? "disabled" : "enabled");
-    
+    printc("consec_failed_init_ctr=%lu\n", no_init_vars.consec_failed_init_ctr);
+
     printc("\nID  PERIOD LAST_FEED  ELAPSED\n"
              "--- ------ ---------- -------\n");
     for (id = 0; id < ARRAY_SIZE(state.soft_wdgs); id++) {
         struct soft_wdg* c = &state.soft_wdgs[id];
-        printc("%3lu %6lu %10lu %7ld\n", 
-               id, 
-               c->period_ms, 
-               c->last_feed_time_ms,
+        printc("%3lu %6lu %10lu %7ld\n", id, c->period_ms, c->last_feed_time_ms,
                tmr_get_ms() - c->last_feed_time_ms);
     }
-    return 0;
+     return 0;
 }
 
 /*
@@ -495,8 +479,36 @@ static int32_t cmd_wdg_status(int32_t argc, const char** argv)
  */
 static int32_t cmd_wdg_test(int32_t argc, const char** argv)
 {
-    // TODO: Implement test commands
-    printc("wdg test not implemented yet\n");
+    int32_t num_args;
+    struct cmd_arg_val arg_vals[1];
+
+    // Handle help case.
+    if (argc == 2) {
+        printc("Test operations and param(s) are as follows:\n"
+               "  Fail hardware wdg: usage: wdg test fail-hdw\n"
+               "  Disable wdg: usage: wdg test disable\n"
+               "  Enable wdg: usage: wdg test enable\n"
+               "  Set init fails: usage: wdg test init-fails N\n"
+            );
+        return 0;
+    }
+
+    if (strcasecmp(argv[2], "fail-hdw") == 0) {
+        test_cmd_fail_hard_wdg = true;
+    } else if (strcasecmp(argv[2], "disable") == 0) {
+        test_cmd_disable_wdg = true;
+    } else if (strcasecmp(argv[2], "enable") == 0) {
+        test_cmd_disable_wdg = false;
+    } else if (strcasecmp(argv[2], "init-fails") == 0) {
+        num_args = cmd_parse_args(argc-3, argv+3, "u", arg_vals);
+        if (num_args == 1) {
+            no_init_vars.consec_failed_init_ctr = arg_vals[0].val.u;
+            update_no_init_vars();
+        }
+    } else {
+        printc("Invalid test '%s'\n", argv[2]);
+        return MOD_ERR_BAD_CMD;
+    }
     return 0;
 }
 
