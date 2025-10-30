@@ -332,6 +332,9 @@ int32_t wdg_start_hdw_wdg(uint32_t timeout_ms)
     LL_IWDG_SetPrescaler(IWDG, WDG_PRESCALE_SETTING);
     LL_IWDG_SetReloadCounter(IWDG, ctr);
 
+    // **ADD THIS LINE - Feed the watchdog to load the reload value!**
+    LL_IWDG_ReloadCounter(IWDG);  // <-- CRITICAL FIX
+
     // Wait for hardware to be ready (poll)
     for (ctr = 0; ctr < SANITY_CTR_LIMIT; ctr++) {
         if (LL_IWDG_IsReady(IWDG))
@@ -387,6 +390,9 @@ static enum tmr_cb_action wdg_tmr_cb(int32_t tmr_id, uint32_t user_data)
     // Think: For each watchdog, check if (now - last_feed) > period
     for (idx = 0; idx < CONFIG_WDG_NUM_WDGS; idx++) {
         // Question 2a: Calculate how long since last feed
+        if (state.soft_wdgs[idx].period_ms == 0) {
+            continue;  // Not registered, skip
+        }
         // Think: now_ms - last_feed_time
         if (now_ms - state.soft_wdgs[idx].last_feed_time_ms >
             state.soft_wdgs[idx].period_ms) {
@@ -495,8 +501,70 @@ static int32_t cmd_wdg_status(int32_t argc, const char** argv)
  */
 static int32_t cmd_wdg_test(int32_t argc, const char** argv)
 {
-    // TODO: Implement test commands
-    printc("wdg test not implemented yet\n");
+    int32_t num_args;
+    struct cmd_arg_val arg_vals[2];
+
+    // Handle help case.
+    if (argc == 2) {
+        printc("Test operations and param(s) are as follows:\n"
+               "  Register watchdog: usage: wdg test register <id> <period_ms>\n"
+               "  Feed watchdog: usage: wdg test feed <id>\n"
+               "  Fail hardware wdg: usage: wdg test fail-hdw\n"
+               "  Disable wdg: usage: wdg test disable\n"
+               "  Enable wdg: usage: wdg test enable\n"
+            );
+        return 0;
+    }
+
+    if (strcasecmp(argv[2], "register") == 0) {
+        // Parse: wdg test register <id> <period_ms>
+        num_args = cmd_parse_args(argc-3, argv+3, "uu", arg_vals);
+        if (num_args == 2) {
+            uint32_t wdg_id = arg_vals[0].val.u;
+            uint32_t period_ms = arg_vals[1].val.u;
+            int32_t rc = wdg_register(wdg_id, period_ms);
+            if (rc == 0) {
+                printc("Registered watchdog %lu with period %lu ms\n",
+                       wdg_id, period_ms);
+            } else {
+                printc("Failed to register watchdog: error %ld\n", rc);
+                return rc;
+            }
+        } else {
+            printc("Usage: wdg test register <id> <period_ms>\n");
+            return MOD_ERR_ARG;
+        }
+    } else if (strcasecmp(argv[2], "feed") == 0) {
+        // Parse: wdg test feed <id>
+        num_args = cmd_parse_args(argc-3, argv+3, "u", arg_vals);
+        if (num_args == 1) {
+            uint32_t wdg_id = arg_vals[0].val.u;
+            int32_t rc = wdg_feed(wdg_id);
+            if (rc == 0) {
+                printc("Fed watchdog %lu\n", wdg_id);
+            } else {
+                printc("Failed to feed watchdog: error %ld\n", rc);
+                return rc;
+            }
+        } else {
+            printc("Usage: wdg test feed <id>\n");
+            return MOD_ERR_ARG;
+        }
+    } else if (strcasecmp(argv[2], "fail-hdw") == 0) {
+        test_cmd_fail_hard_wdg = true;
+        printc("Hardware watchdog will not be fed\n");
+    } else if (strcasecmp(argv[2], "disable") == 0) {
+        test_cmd_disable_wdg = true;
+        printc("Watchdog checking disabled\n");
+    } else if (strcasecmp(argv[2], "enable") == 0) {
+        test_cmd_disable_wdg = false;
+        printc("Watchdog checking enabled\n");
+    } else {
+        printc("Invalid test '%s'\n", argv[2]);
+        return MOD_ERR_BAD_CMD;
+    }
+
     return 0;
 }
+
 
