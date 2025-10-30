@@ -224,6 +224,39 @@ int printc(const char* fmt, ...)
 }
 
 /*
+ * @brief Print to console in panic mode (no interrupts, polling only).
+ *
+ * @param[in] fmt Format string as in printf.
+ * @param[in] ... Format arguments as in printf.
+ *
+ * @return Number of characters written as in printf.
+ *
+ * This function is safe to call in panic mode (interrupts disabled).
+ * It uses ttys_putc_panic which does polling I/O instead of interrupts.
+ */
+int printc_panic(const char* fmt, ...)
+{
+    va_list args;
+    char buf[CONFIG_CONSOLE_PRINT_BUF_SIZE];
+    int rc;
+    int idx;
+
+    va_start(args, fmt);
+    rc = vsnprintf(buf, CONFIG_CONSOLE_PRINT_BUF_SIZE, fmt, args);
+    va_end(args);
+    for (idx = 0; idx < rc; idx++) {
+        ttys_putc_panic(state.cfg.ttys_instance_id, buf[idx]);
+        if (buf[idx] == '\0')
+            break;
+        if (buf[idx] == '\n') 
+            ttys_putc_panic(state.cfg.ttys_instance_id, '\r');
+    }
+    if (rc >= CONFIG_CONSOLE_PRINT_BUF_SIZE)
+        printc_panic("[!]\n");
+    return rc;
+}
+
+/*
  * @brief A vprintf for the console, safe to use in interrupts.
  *
  * @param[in] fmt Format string as in vprintf.

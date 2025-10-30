@@ -57,6 +57,7 @@ int32_t ttys_start(enum ttys_instance_id instance_id);
 
 // Other APIs.
 int32_t ttys_putc(enum ttys_instance_id instance_id, char c);
+int32_t ttys_putc_panic(enum ttys_instance_id instance_id, char c);
 int32_t ttys_getc(enum ttys_instance_id instance_id, char* c);
 int ttys_get_fd(enum ttys_instance_id instance_id);
 FILE* ttys_get_stream(enum ttys_instance_id instance_id);

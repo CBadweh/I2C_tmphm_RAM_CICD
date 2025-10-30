@@ -227,6 +227,9 @@ void app_main(void)
     // ===== START PHASE: Enable modules for operation =====
     printc("\n[START] Starting modules...\n");
     
+    // Day 4: Start hardware watchdog EARLY (protect initialization)
+    wdg_start_init_hdw_wdg();  // ADD THIS - protect init phase
+
     // Serial UART
     ttys_start(TTYS_INSTANCE_UART2);
     
@@ -242,6 +245,12 @@ void app_main(void)
     // TMPHM Module (registers 1-second timer - YOUR CODE DOES THIS!)
     tmphm_start(TMPHM_INSTANCE_1);
     
+    // Day 4: Start Fault Module (register watchdog callback)
+    fault_start();  // ADD THIS
+
+    // Day 4: Start Watchdog Module (start periodic checker)
+    wdg_start();  // ADD THIS
+
     // LWL Logging (Day 3 afternoon - flight recorder)
     lwl_start();
     lwl_enable(true);  // Start recording activity
@@ -252,6 +261,12 @@ void app_main(void)
     cmd_register(&cmd_info);
 
     stat_dur_init(&stat_loop_dur);
+
+    // Day 4: Mark initialization as successful (reset init failure counter)
+    wdg_init_successful();  // ADD THIS
+
+    // Day 4: Start runtime hardware watchdog
+    wdg_start_hdw_wdg(CONFIG_WDG_HARD_TIMEOUT_MS);  // ADD THIS
 
     // ===== SUPER LOOP: Run modules continuously =====
     printc("\n[READY] Entering super loop...\n");

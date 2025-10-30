@@ -1,5 +1,43 @@
 /*
-
+ * @brief Implementation of fault module.
+ *
+ * This module is the main one for detecting and handling serious faults in the
+ * system. More specifically:
+ * - It handles any unexpected exceptions (e.g. hard faults).
+ * - It sets up a guard region to prevent the stack from overflowing into other
+ *   areas of RAM.
+ * - It handles watchdog module timeout notifications.
+ * - On a fault (panic), it writes diagnositc data to the console and to flash
+ *   (depending on configuration). This includes the light weight log (lwl)
+ *   buffer.
+ *
+ * The following console commands are provided:
+ * > fault data [erase]
+ * > fault status
+ * > fault test
+ * See code for details.
+ *
+ * MIT License
+ * 
+ * Copyright (c) 2021 Eugene R Schroeder
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 
 #include <stdint.h>
@@ -195,13 +233,13 @@ extern uint32_t _e_stack_guard;
  */
 int32_t fault_init(struct fault_cfg* cfg)
 {
-    // TODO: Follow fault_handling_watchdog_progressive_reconstruction.md
-    // Phase 2, Function 1: fault_init()
-    // Question: What does fault_get_rcc_csr do?
-    // Hint: Captures reset reason (watchdog, power-on, etc.)
-    
-	fault_get_rcc_csr(); // Capture reset reason NOW
-    
+    fault_get_rcc_csr();
+
+    // A future feature would be to detect a reset due to the hardware watchdog
+    // and if true, save the LWL buffer at this time. This would require the LWL
+    // buffer to be preserved during early initialization, which might be best
+    // done by putting it in its own section (vs being in .data/.bss).
+
     return 0;
 }
 
@@ -217,30 +255,31 @@ int32_t fault_start(void)
     int32_t rc;
     uint32_t* sp;
 
-    // TODO: Follow fault_handling_watchdog_progressive_reconstruction.md
-    // Phase 2, Function 2: fault_start()
-    
-    // Question 1: Register console commands
-    // wdg_register()
     rc = cmd_register(&cmd_info);
     if (rc < 0) {
         log_error("fault_start: cmd_register error %d\n", rc);
         return rc;
     }
 
-    // Question 2: Register callback with watchdog module
     rc = wdg_register_triggered_cb(wdg_triggered_handler);
     if (rc != 0) {
         log_error("fault_start: wdg_register_triggered_cb returns %ld\n", rc);
         return rc;
     }
 
-    // Question 3: Fill stack with pattern (for high water mark detection)
+    // Fill stack with a pattern so we can detect high water mark. We also fill
+    // the stack guard region (which hasn't been set up yet) just for
+    // completeness even though it isn't necessary.
+    //
+    // The stack pointer points to the last word written, so we first decrement
+    // it to get to the next word to write.
+
     __ASM volatile("MOV  %0, sp" : "=r" (sp) : : "memory");
     sp--;
     while (sp >= &_s_stack_guard)
-    	*sp-- = STACK_INIT_PATTERN;
+        *sp-- = STACK_INIT_PATTERN;
 
+#if CONFIG_MPU_TYPE == 1
 
     // Set up stack guard region.
     //
@@ -278,6 +317,56 @@ int32_t fault_start(void)
 
     ARM_MPU_Enable(MPU_CTRL_PRIVDEFENA_Msk|MPU_CTRL_HFNMIENA_Msk);
 
+#elif CONFIG_MPU_TYPE == 2
+
+    // Set up stack guard region.
+    //
+    // ARM_MPU_SetMemAttr(uint8_t idx, uint8_t attr)
+    // - param idx The attribute index to be set [0-7]
+    // - param attr The attribute value to be set (MAIR):
+    //   + Upper nibble = 0x4, meaning Normal memory, Outer non-cacheable.
+    //   + Lower nibble = 0x4, meaning Normal memory, Inner non-cacheable.
+    //
+    // ARM_MPU_SetRegion(uint32_t rnr, uint32_t rbar, uint32_t rlar)
+    // - param rnr Region number to be configured, 0.
+    // - param rbar Value for RBAR register.
+    // - param rlar Value for RLAR register.
+    //
+    // ARM_MPU_RBAR((uint32_t)(&_s_stack_guard)
+    // - param BASE The base address bits [31:5] of a memory region. The value
+    //              is zero extended. Effective address gets 32 byte aligned.
+    // - param SH Defines the Shareability domain for this memory region.
+    // - param RO Read-Only: Set to 1 for a read-only memory region.
+    // - param NP Non-Privileged: Set to 1 for a non-privileged memory region.
+    // - param XN eXecute Never: Set to 1 for a non-executable memory region.
+    //
+    // ARM_MPU_RLAR(LIMIT, IDX)
+    // - param LIMIT The limit address bits [31:5] for this memory region. The
+    //               value is one extended.
+    // - param IDX The attribute index to be associated with this memory region.
+    //             region.
+
+    ARM_MPU_SetMemAttr(0, 0x44);
+    ARM_MPU_SetRegion(0,
+                      ARM_MPU_RBAR((uint32_t)(&_s_stack_guard),
+                                   ARM_MPU_SH_OUTER,
+                                   1,
+                                   1,
+                                   1),
+                      ARM_MPU_RLAR(((uint32_t)(&_s_stack_guard) + 
+                                    STACK_GUARD_BLOCK_SIZE - 1),
+                                   0));
+
+    // Now enable the MPU.
+    // - PRIVDEFENA = 1, meaning the default memory map is used if there is no
+    //   MPU region.
+    // - HFNMIENA = 1, meaning MPU is used for even high priority exception
+    //   handlers.
+
+    ARM_MPU_Enable(MPU_CTRL_PRIVDEFENA_Msk|MPU_CTRL_HFNMIENA_Msk);
+
+#endif
+
     return 0;
 }
 
@@ -294,38 +383,21 @@ int32_t fault_start(void)
  */
 void fault_detected(enum fault_type fault_type, uint32_t fault_param)
 {
-    // TODO: Follow fault_handling_watchdog_progressive_reconstruction.md
-    // Phase 2, Function 3: fault_detected() - THE HEART
-
-    // Question 1: Enter critical section (disable interrupts)
-    // TODO: ???;
-	CRIT_START();
-
-
-    // Question 2: Feed hardware watchdog (buy time to collect data)
+    // Panic mode.
+    CRIT_START();
     wdg_feed_hdw();
 
-    // Question 3: Disable MPU to avoid secondary faults)
-    // TODO: ???();
+    // Disable MPU to avoid another fault (shouldn't be necessary)
     ARM_MPU_Disable();
 
-    // Question 4: Start collecting fault data
-     fault_data_buf.fault_type = fault_type;
-     fault_data_buf.fault_param = fault_param;
-     memset(&fault_data_buf.excpt_stk_r0, 0, EXCPT_STK_BYTES);
-
-    // Question 5: Save current LR and SP registers (before resetting SP)
-     __ASM volatile("MOV  %0, lr" : "=r" (fault_data_buf.lr) : : "memory");
-     __ASM volatile("MOV  %0, sp" : "=r" (fault_data_buf.sp) : : "memory");
-
-    // Question 6: Reset stack pointer to top of RAM
-     __ASM volatile("MOV  sp, %0" : : "r" (_estack) : "memory");
-
-    // Question 7: Call common handler (collects more data, writes to flash, resets)
-     fault_common_handler();
-    
-    (void)fault_type;    // Suppress unused parameter warning
-    (void)fault_param;   // Suppress unused parameter warning
+    // Start to collect fault data.
+    fault_data_buf.fault_type = fault_type;
+    fault_data_buf.fault_param = fault_param;
+    memset(&fault_data_buf.excpt_stk_r0, 0, EXCPT_STK_BYTES);
+    __ASM volatile("MOV  %0, lr" : "=r" (fault_data_buf.lr) : : "memory");
+    __ASM volatile("MOV  %0, sp" : "=r" (fault_data_buf.sp) : : "memory");
+    __ASM volatile("MOV  sp, %0" : : "r" (&_estack) : "memory");
+    fault_common_handler();
 }
 
 /*
@@ -420,52 +492,42 @@ uint32_t fault_get_rcc_csr(void)
  */
 static void fault_common_handler()
 {
-    // TODO: Follow fault_handling_watchdog_progressive_reconstruction.md
-    // Phase 2, Function 4: fault_common_handler()
     uint8_t* lwl_data;
     uint32_t lwl_num_bytes;
     struct end_marker end;
 
-    // Question 1: Disable LWL (we're panicking, don't log anymore)
-	lwl_enable(false);
+    lwl_enable(false);
+    printc_panic("\nFault type=%lu param=%lu\n", fault_data_buf.fault_type,
+                 fault_data_buf.fault_param);
 
-    // Question 2: Print fault info to console
-     printc_panic("\nFault type=%lu param=%lu\n",
-                   fault_data_buf.fault_type,
-                   fault_data_buf.fault_param);
-
-    // Question 3: Set magic number (identifies this data structure)
-     fault_data_buf.magic = MOD_MAGIC_FAULT;
-     fault_data_buf.num_section_bytes = sizeof(fault_data_buf);
-
-    // Question 4: Collect ARM system registers (detailed diagnostics)
+    // Populate data buffer and then record it.
+    fault_data_buf.magic = MOD_MAGIC_FAULT;
+    fault_data_buf.num_section_bytes = sizeof(fault_data_buf);
     fault_data_buf.ipsr = __get_IPSR();
     fault_data_buf.icsr = SCB->ICSR;
-    fault_data_buf.shcsr = SCB->SHCSR;
-    fault_data_buf.cfsr = SCB->CFSR;
-    fault_data_buf.hfsr = SCB->HFSR;
-    fault_data_buf.mmfar = SCB->MMFAR;
-    fault_data_buf.bfar = SCB->BFAR;
-    fault_data_buf.tick_ms = tmr_get_ms();  // Hint: Get current time
+    fault_data_buf.shcsr =  SCB->SHCSR;
+    fault_data_buf.cfsr =  SCB->CFSR;
+    fault_data_buf.hfsr =  SCB->HFSR;
+    fault_data_buf.mmfar =  SCB->MMFAR;
+    fault_data_buf.bfar =  SCB->BFAR;
+    fault_data_buf.tick_ms = tmr_get_ms();
 
-    // Question 5: Get LWL buffer (flight recorder data)
-    lwl_data = lwl_get_buffer(&lwl_num_bytes);
-
-    // Question 6: Record fault data to flash (if enabled)
+    // Record the MCU data.
     record_fault_data(0, (uint8_t*)&fault_data_buf, sizeof(fault_data_buf));
 
-    // Question 7: Record LWL buffer after fault data
+    // Record the LWL buffer.
+    lwl_data = lwl_get_buffer(&lwl_num_bytes);
     record_fault_data(sizeof(fault_data_buf), lwl_data, lwl_num_bytes);
 
-    // Record end marker
+    // Record end marker.
     memset(&end, 0, sizeof(end));
     end.magic = MOD_MAGIC_END;
     end.num_section_bytes = sizeof(end);
+
     record_fault_data(sizeof(fault_data_buf) + lwl_num_bytes, (uint8_t*)&end,
                       sizeof(end));
 
-    
-    // Temporary: Reset system immediately (so function doesn't return)
+    // Reset system - this function will not return.
     NVIC_SystemReset();
 }
 
@@ -663,7 +725,7 @@ static int32_t cmd_fault_test(int32_t argc, const char** argv)
     } else if (strcasecmp(argv[2], "ptr") == 0) {
         *((uint32_t*)0xffffffff) = 0xbad;
     } else {
-        printc("Invalid test '\%s'\n", argv[2]);
+        printc("Invalid test '%s'\n", argv[2]);
         return MOD_ERR_BAD_CMD;
     }
     return 0;

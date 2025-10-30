@@ -69,6 +69,7 @@
 #include "stm32f4xx_ll_usart.h"
 
 #include "cmd.h"
+#include "config.h"
 #include "console.h"
 #include "log.h"
 #include "module.h"
@@ -358,6 +359,44 @@ int32_t ttys_putc(enum ttys_instance_id instance_id, char c)
         LL_USART_EnableIT_TXE(st->uart_reg_base);
     }
     CRIT_END_NEST();
+    return 0;
+}
+
+/*
+ * @brief Send a character in panic mode (no interrupts, polling only).
+ *
+ * @param[in] instance_id Identifies the ttys instance.
+ * @param[in] c Character to send.
+ *
+ * @return 0 for success, non-zero for error.
+ *
+ * This function is safe to call in panic mode (interrupts disabled).
+ * It uses polling instead of interrupts and doesn't rely on buffers.
+ * If instance_id is invalid, it falls back to the default console instance.
+ */
+int32_t ttys_putc_panic(enum ttys_instance_id instance_id, char c)
+{
+    struct ttys_state* st;
+
+    // Validate instance ID, fall back to default console if invalid
+    if (instance_id >= TTYS_NUM_INSTANCES)
+        instance_id = CONFIG_CONSOLE_DFLT_TTYS_INSTANCE;
+    
+    st = &ttys_states[instance_id];
+    
+    if (st->uart_reg_base == NULL)
+        // This should not happen.
+        return MOD_ERR_INTERNAL;
+    
+    // Wait for TX register empty (polling mode, no interrupts)
+    while (!(st->uart_reg_base->SR & LL_USART_SR_TXE));
+    
+    // Write the character
+    st->uart_reg_base->DR = c;
+    
+    // Wait for TX to complete
+    while (!(st->uart_reg_base->SR & LL_USART_SR_TXE));
+    
     return 0;
 }
 

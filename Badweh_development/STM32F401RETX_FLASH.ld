@@ -40,6 +40,7 @@ _estack = ORIGIN(RAM) + LENGTH(RAM); /* end of "RAM" Ram type memory */
 
 _Min_Heap_Size = 0x200; /* required amount of heap */
 _Min_Stack_Size = 0x400; /* required amount of stack */
+_MPU_Min_Block_Size = 32; /* MPU minimum region size for stack guard */
 
 /* Memories definition */
 MEMORY
@@ -171,6 +172,10 @@ SECTIONS
     PROVIDE ( end = . );
     PROVIDE ( _end = . );
     . = . + _Min_Heap_Size;
+    . = ALIGN(32);
+    _s_stack_guard = .;
+    . = . + _MPU_Min_Block_Size;
+    _e_stack_guard = .;
     . = . + _Min_Stack_Size;
     . = ALIGN(8);
   } >RAM
