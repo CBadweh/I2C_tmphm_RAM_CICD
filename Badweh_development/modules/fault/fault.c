@@ -217,30 +217,25 @@ int32_t fault_start(void)
     int32_t rc;
     uint32_t* sp;
 
-    // TODO: Follow fault_handling_watchdog_progressive_reconstruction.md
-    // Phase 2, Function 2: fault_start()
-    
-    // Question 1: Register console commands
-    // wdg_register()
     rc = cmd_register(&cmd_info);
     if (rc < 0) {
         log_error("fault_start: cmd_register error %d\n", rc);
         return rc;
     }
 
-    // Question 2: Register callback with watchdog module
     rc = wdg_register_triggered_cb(wdg_triggered_handler);
     if (rc != 0) {
         log_error("fault_start: wdg_register_triggered_cb returns %ld\n", rc);
         return rc;
     }
 
-    // Question 3: Fill stack with pattern (for high water mark detection)
+    // Fill stack with a pattern so we can detect high water mark.
     __ASM volatile("MOV  %0, sp" : "=r" (sp) : : "memory");
     sp--;
     while (sp >= &_s_stack_guard)
-    	*sp-- = STACK_INIT_PATTERN;
+        *sp-- = STACK_INIT_PATTERN;
 
+#if CONFIG_MPU_TYPE == 1
 
     // Set up stack guard region.
     //
@@ -277,6 +272,8 @@ int32_t fault_start(void)
     //   handlers.
 
     ARM_MPU_Enable(MPU_CTRL_PRIVDEFENA_Msk|MPU_CTRL_HFNMIENA_Msk);
+
+#endif
 
     return 0;
 }
@@ -319,7 +316,7 @@ void fault_detected(enum fault_type fault_type, uint32_t fault_param)
      __ASM volatile("MOV  %0, sp" : "=r" (fault_data_buf.sp) : : "memory");
 
     // Question 6: Reset stack pointer to top of RAM
-     __ASM volatile("MOV  sp, %0" : : "r" (_estack) : "memory");
+     __ASM volatile("MOV  sp, %0" : : "r" (&_estack) : "memory");  // CRITICAL: Use & to get address!
 
     // Question 7: Call common handler (collects more data, writes to flash, resets)
      fault_common_handler();

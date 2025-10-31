@@ -47,6 +47,7 @@
 // Day 4: Fault Handling and Watchdog
 #include "fault.h"       // Fault detection and handling
 #include "wdg.h"         // Watchdog protection
+#include "flash.h"       // Flash storage (for fault diagnostics)
 
 // Removed (not needed for Day 3):
 // #include "blinky.h"   - Visual indicator, not critical
@@ -74,6 +75,7 @@ enum main_u16_pms {
 ////////////////////////////////////////////////////////////////////////////////
 
 static int32_t cmd_main_status();
+static int32_t cmd_main_fault();
 
 ////////////////////////////////////////////////////////////////////////////////
 // Private (static) variables
@@ -86,6 +88,11 @@ static struct cmd_cmd_info cmds[] = {
         .name = "status",
         .func = cmd_main_status,
         .help = "Get main status, usage: main status [clear]",
+    },
+    {
+        .name = "fault",
+        .func = cmd_main_fault,
+        .help = "Trigger test fault, usage: main fault",
     },
 };
 
@@ -221,8 +228,9 @@ void app_main(void)
     tmphm_cfg.i2c_instance_id = I2C_INSTANCE_3;  // Tell TMPHM to use I2C bus 3
     tmphm_init(TMPHM_INSTANCE_1, &tmphm_cfg);
 
-    fault_init(NULL);     // Line ~219
-    wdg_init(NULL);       // Line ~220
+    fault_init(NULL);     // EARLY: Just captures reset reason
+    wdg_init(NULL);
+    // NOTE: flash and lwl don't have init(), only start()
 
     // ===== START PHASE: Enable modules for operation =====
     printc("\n[START] Starting modules...\n");
@@ -244,13 +252,13 @@ void app_main(void)
     
     // TMPHM Module (registers 1-second timer - YOUR CODE DOES THIS!)
     tmphm_start(TMPHM_INSTANCE_1);
-    
-    // Day 4: Start Fault Module (register watchdog callback)
-    fault_start();  // ADD THIS
 
     // Day 4: Start Watchdog Module (start periodic checker)
     wdg_start();  // ADD THIS
 
+    // Flash - Required by fault handler for panic data storage
+    flash_start();
+    
     // LWL Logging (Day 3 afternoon - flight recorder)
     lwl_start();
     lwl_enable(true);  // Start recording activity
@@ -267,6 +275,9 @@ void app_main(void)
 
     // Day 4: Start runtime hardware watchdog
     wdg_start_hdw_wdg(CONFIG_WDG_HARD_TIMEOUT_MS);  // ADD THIS
+
+    // Day 4: Start Fault Module (watchdog callback, stack pattern, MPU)
+    fault_start();
 
     // ===== SUPER LOOP: Run modules continuously =====
     printc("\n[READY] Entering super loop...\n");
@@ -350,5 +361,45 @@ static int32_t cmd_main_status(int32_t argc, const char** argv)
         printc("Clearing loop stat\n");
         stat_dur_init(&stat_loop_dur);
     }
+    return 0;
+}
+
+/*
+ * @brief Console command function for "main fault".
+ *
+ * @param[in] argc Number of arguments, including "main"
+ * @param[in] argv Argument values, including "main"
+ *
+ * @return 0 for success, else a "MOD_ERR" value. See code for details.
+ *
+ * Command usage: main fault
+ *
+ * NOTE: This is a TEST FUNCTION for fault injection testing.
+ *       DO NOT LEAVE ENABLED IN PRODUCTION CODE!
+ */
+static int32_t cmd_main_fault(int32_t argc, const char** argv)
+{
+    (void)argc;  // Suppress unused parameter warning
+    (void)argv;  // Suppress unused parameter warning
+    
+    printc("\n");
+    printc("========================================\n");
+    printc("  !!! TRIGGERING TEST FAULT !!!\n");
+    printc("========================================\n");
+    printc("Method: Invalid memory access\n");
+    printc("Expected: HardFault -> fault_detected()\n");
+    printc("System will crash and reset...\n");
+    printc("Watch for fault diagnostics in flash!\n");
+    printc("========================================\n\n");
+    
+    // Give time for console output to flush (UART is buffered)
+    for (volatile int i = 0; i < 200000; i++);
+    
+    // Method 1: Write to invalid high memory (GUARANTEED fault on STM32)
+    // 0xFFFFFFFF is not mapped to any valid memory/peripheral
+    uint32_t *bad_ptr = (uint32_t*)0xFFFFFFFF;
+    *bad_ptr = 0x12345678;  // BOOM! BusFault or HardFault
+    
+    // This line will NEVER execute
     return 0;
 }

@@ -23,6 +23,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "tmr.h"
+// Fault module exception handler
+extern void fault_exception_handler(uint32_t sp);
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -85,7 +87,12 @@ void NMI_Handler(void)
 void HardFault_Handler(void)
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
-
+  // Call fault module's exception handler
+  // Now safe: fault_start() called after all dependencies initialized
+  // MPU disabled in fault_start() to avoid early boot issues
+  uint32_t saved_sp;
+  __ASM volatile("mov %0, sp" : "=r" (saved_sp));
+  fault_exception_handler(saved_sp);
   /* USER CODE END HardFault_IRQn 0 */
   while (1)
   {

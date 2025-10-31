@@ -28,6 +28,7 @@
 #include "module.h"
 #include "tmr.h"
 #include "tmphm.h"
+#include "wdg.h"      // <-- ADD THIS LINE
 
 enum states {
     STATE_IDLE,
@@ -112,6 +113,14 @@ int32_t tmphm_start(enum tmphm_instance_id instance_id)
 	if(st.tmr_id < 0){
 		return MOD_ERR_RESOURCE;
 	}
+    // **ADD THESE LINES - Register TMPHM watchdog with 5-second timeout**
+    int32_t rc = wdg_register(CONFIG_TMPHM_WDG_ID, 5000);
+    if (rc < 0) {
+        log_error("tmphm_start: wdg_register error %d\n", rc);
+        return rc;
+    }
+    log_info("tmphm_start: Registered watchdog %d with 5s timeout\n",
+             CONFIG_TMPHM_WDG_ID);
 
     return 0;
 }
@@ -137,9 +146,12 @@ int32_t tmphm_run(enum tmphm_instance_id instance_id){
         		rc = i2c_write(st.cfg.i2c_instance_id,st.cfg.i2c_addr, st.msg_bfr,2 );
         		if (rc ==  0){
         			st.state = STATE_WRITE_MEAS_CMD;
+        		} else {
+					i2c_release(st.cfg.i2c_instance_id);
+					st.state = STATE_IDLE;
         		}
-                i2c_release(st.cfg.i2c_instance_id);
-                st.state = STATE_IDLE;
+        	}else {
+        		log_error("TMPHM: Reserve failed rc=%ld\n", rc);
         	}
 
             break;
@@ -203,6 +215,9 @@ int32_t tmphm_run(enum tmphm_instance_id instance_id){
                         st.last_meas_ms = tmr_get_ms();  // Current time
                         st.got_meas = true;  // We have valid data now!
 
+                        // **ADD THIS LINE - Feed watchdog after successful measurement!**
+                        wdg_feed(CONFIG_TMPHM_WDG_ID);
+
 //                        log_info("temp=%ld degC*10 hum=%lu %%*10\n", temp, hum);
         			}
     			    // Always release I2C after read completes
@@ -224,7 +239,113 @@ int32_t tmphm_run(enum tmphm_instance_id instance_id){
 
 }
 
+/*
+int32_t tmphm_run(enum tmphm_instance_id instance_id){
 
+    int32_t rc;  // For return codes
+
+    switch (st.state) {
+
+        case STATE_IDLE:
+            // Do idle work
+            break;
+
+        case STATE_RESERVE_I2C:
+            // **ADD THIS DEBUG LINE**
+            log_info("TMPHM: Attempting I2C reserve\n");
+
+            rc = i2c_reserve(st.cfg.i2c_instance_id);
+            if (rc == 0){
+                st.msg_bfr[0] = 0x2c;
+                st.msg_bfr[1] = 0x06;
+                rc = i2c_write(st.cfg.i2c_instance_id, st.cfg.i2c_addr, st.msg_bfr, 2);
+                if (rc == 0){
+                    st.state = STATE_WRITE_MEAS_CMD;
+                    log_info("TMPHM: Write started\n");  // **ADD THIS**
+                } else {
+                    log_error("TMPHM: Write failed rc=%ld\n", rc);  // **ADD THIS**
+                    i2c_release(st.cfg.i2c_instance_id);  // Only release on error
+                    st.state = STATE_IDLE;
+                }
+
+            } else {
+                log_error("TMPHM: Reserve failed rc=%ld\n", rc);  // **ADD THIS**
+            }
+            break;
+
+        case STATE_WRITE_MEAS_CMD:
+            rc = i2c_get_op_status(st.cfg.i2c_instance_id);
+            if(rc != MOD_ERR_OP_IN_PROG){
+                if(rc == 0){
+                    st.i2c_op_start_ms = tmr_get_ms();
+                    st.state = STATE_WAIT_MEAS;
+                    log_info("TMPHM: Write done, waiting\n");  // **ADD THIS**
+                } else {
+                    log_error("TMPHM: Write status error rc=%ld\n", rc);  // **ADD THIS**
+                    i2c_release(st.cfg.i2c_instance_id);
+                    st.state = STATE_IDLE;
+                }
+            }
+            break;
+
+        case STATE_WAIT_MEAS:
+            if ( tmr_get_ms() - st.i2c_op_start_ms >= st.cfg.meas_time_ms){
+                log_info("TMPHM: Wait complete, reading\n");  // **ADD THIS**
+                rc = i2c_read(st.cfg.i2c_instance_id, st.cfg.i2c_addr, st.msg_bfr, 6);
+                if (rc == 0){
+                    st.state = STATE_READ_MEAS_VALUE;
+                } else {
+                    log_error("TMPHM: Read start failed rc=%ld\n", rc);  // **ADD THIS**
+                    i2c_release(st.cfg.i2c_instance_id);
+                    st.state = STATE_IDLE;
+                }
+            }
+            break;
+
+        case STATE_READ_MEAS_VALUE:
+            rc = i2c_get_op_status(st.cfg.i2c_instance_id);
+            if (rc != MOD_ERR_OP_IN_PROG ){
+                if (rc == 0){
+                    uint8_t* msg = st.msg_bfr;
+
+                    if (crc8(&msg[0], 2) != msg[2] ||
+                        crc8(&msg[3], 2) != msg[5]) {
+                        log_error("TMPHM: CRC error\n");  // **UNCOMMENT/ADD THIS**
+                    } else {
+                        // Convert raw data
+                        const uint32_t divisor = 65535;
+                        int32_t temp = (msg[0] << 8) + msg[1];
+                        uint32_t hum = (msg[3] << 8) + msg[4];
+                        temp = -450 + (1750 * temp + divisor/2) / divisor;
+                        hum = (1000 * hum + divisor/2) / divisor;
+
+                        // Store the result
+                        st.last_meas.temp_deg_c_x10 = temp;
+                        st.last_meas.rh_percent_x10 = hum;
+                        st.last_meas_ms = tmr_get_ms();
+                        st.got_meas = true;
+
+                        log_info("TMPHM: temp=%ld degC*10 hum=%lu %%*10\n", temp, hum);  // **UNCOMMENT/ADD THIS**
+
+                        // Feed watchdog after successful measurement!
+                        wdg_feed(CONFIG_TMPHM_WDG_ID);
+                        log_info("TMPHM: Fed watchdog\n");  // **ADD THIS**
+                    }
+                    // Always release I2C after read completes
+                    i2c_release(st.cfg.i2c_instance_id);
+                    st.state = STATE_IDLE;
+                } else {
+                    log_error("TMPHM: Read status error rc=%ld\n", rc);  // **ADD THIS**
+                    i2c_release(st.cfg.i2c_instance_id);
+                    st.state = STATE_IDLE;
+                }
+            }
+            break;
+    }
+
+    return 0;
+}
+*/
 int32_t tmphm_get_last_meas(enum tmphm_instance_id instance_id,
                             struct tmphm_meas* meas, uint32_t* meas_age_ms)
 {
