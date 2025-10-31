@@ -235,7 +235,7 @@ int32_t fault_start(void)
     while (sp >= &_s_stack_guard)
         *sp-- = STACK_INIT_PATTERN;
 
-#if CONFIG_MPU_TYPE == 1
+#if 0  // TEMPORARILY DISABLED MPU FOR DEBUGGING - Testing if MPU causes register corruption
 
     // Set up stack guard region.
     //
@@ -487,18 +487,28 @@ static void record_fault_data(uint32_t data_offset, uint8_t* data_addr,
         int32_t rc;
         
         if (data_offset == 0) {
+            printc_panic("[FLASH] Checking existing data...\n");
             do_flash = ((struct fault_data*)FLASH_PANIC_DATA_ADDR)->magic !=
                 MOD_MAGIC_FAULT;
+            printc_panic("[FLASH] do_flash=%d (addr=0x%08lx, magic=0x%08lx)\n", 
+                        do_flash, (uint32_t)FLASH_PANIC_DATA_ADDR,
+                        ((struct fault_data*)FLASH_PANIC_DATA_ADDR)->magic);
         }
         if (do_flash) {
             if (data_offset == 0) {
+                printc_panic("[FLASH] About to ERASE page at 0x%08lx\n", 
+                            (uint32_t)FLASH_PANIC_DATA_ADDR);
                 rc = flash_panic_erase_page((uint32_t*)FLASH_PANIC_DATA_ADDR);
+                printc_panic("[FLASH] Erase returned %ld\n", rc);
                 if (rc != 0)
                     printc_panic("flash_panic_erase_page returns %ld\n", rc);
             }
+            printc_panic("[FLASH] About to WRITE %lu bytes at offset %lu\n", 
+                        num_bytes, data_offset);
             rc = flash_panic_write((uint32_t*)(FLASH_PANIC_DATA_ADDR +
                                                data_offset),
                                    (uint32_t*)data_addr, num_bytes);
+            printc_panic("[FLASH] Write returned %ld\n", rc);
             if (rc != 0)
                 printc_panic("flash_panic_write returns %ld\n", rc);
         }
