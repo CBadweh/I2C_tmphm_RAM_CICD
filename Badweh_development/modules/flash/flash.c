@@ -259,19 +259,17 @@ int32_t flash_start(void)
 int32_t flash_panic_erase_page(uint32_t* start_addr)
 {
     int32_t page_num = addr_to_page_num(start_addr);
-    if (page_num < 0) {
-        printc("[E-ERR] pg=%ld\n", page_num);
+    if (page_num < 0)
         return page_num;
-    }
-    printc("[E-START] pg=%ld\n", page_num);
+
+    log_debug("flash panic erase start_addr=0x%08x page_num=%ld\n",
+              (unsigned)start_addr, page_num);
 
     // Check that no flash main memory operation is ongoing.
     if (FLASH_SR & FLASH_SR_BSY_Msk)
         return MOD_ERR_BUSY;
 
-    printc("[E-OP_START]\n");
     flash_panic_op_start();
-    printc("[E-OP_DONE]\n");
 
 #if CONFIG_FLASH_TYPE == 1 // Example: STM32L452xx 
 
@@ -311,22 +309,16 @@ int32_t flash_panic_erase_page(uint32_t* start_addr)
 #endif
 
     // Start the erase.
-    printc("[E-STRT]\n");
     FLASH_CR |= FLASH_CR_STRT_Msk;
 
     // Wait for BSY bit to be cleared in FLASH->SR.
-    printc("[E-WAIT]\n");
     while (FLASH_SR & FLASH_SR_BSY_Msk) {}
-    printc("[E-BSY_CLR]\n");
 
     flash_panic_op_complete();
 
-    if (last_op_error_mask != 0) {
-        printc("[E-ERR]\n");
+    if (last_op_error_mask != 0)
         return MOD_ERR_PERIPH;
-    }
 
-    printc("[E-OK]\n");
     return 0;
 }
 
@@ -539,7 +531,8 @@ static int32_t addr_to_page_num(uint32_t* addr)
         0x08040000,
         0x08060000,
     };
-    for (page_num = 0; page_num < ARRAY_SIZE(sector_addr); page_num++) {  // FIX: < not <=
+    // FIXED: Use < instead of <= to prevent buffer overflow
+    for (page_num = 0; page_num < ARRAY_SIZE(sector_addr); page_num++) {
         if ((uint32_t)addr == sector_addr[page_num])
             return page_num;
     }
@@ -629,4 +622,3 @@ static int32_t cmd_flash_write(int32_t argc, const char** argv)
     printc("rc=%ld\n", rc);
     return rc;
 }
-

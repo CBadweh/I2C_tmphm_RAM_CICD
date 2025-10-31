@@ -235,7 +235,7 @@ int32_t fault_start(void)
     while (sp >= &_s_stack_guard)
         *sp-- = STACK_INIT_PATTERN;
 
-#if 0  // TEMPORARILY DISABLED MPU FOR DEBUGGING - Testing if MPU causes register corruption
+#if CONFIG_MPU_TYPE == 1
 
     // Set up stack guard region.
     //

@@ -87,11 +87,11 @@ void NMI_Handler(void)
 void HardFault_Handler(void)
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
-  // TEMPORARILY DISABLED: Prevents recursive fault loop when debugging flash
-  // If flash operation causes fault, we don't want fault handler using flash!
-  // uint32_t saved_sp;
-  // __ASM volatile("mov %0, sp" : "=r" (saved_sp));
-  // fault_exception_handler(saved_sp);
+  // Call fault module's exception handler
+  // Flash is disabled, so safe from recursive loops
+  uint32_t saved_sp;
+  __ASM volatile("mov %0, sp" : "=r" (saved_sp));
+  fault_exception_handler(saved_sp);
   /* USER CODE END HardFault_IRQn 0 */
   while (1)
   {

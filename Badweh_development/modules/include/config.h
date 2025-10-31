@@ -80,7 +80,7 @@
     #define CONFIG_WDG_INIT_TIMEOUT_MS 8000
 
     #define CONFIG_FAULT_PANIC_TO_CONSOLE 1
-    #define CONFIG_FAULT_PANIC_TO_FLASH 0    // DISABLED: Console unresponsive issue
+    #define CONFIG_FAULT_PANIC_TO_FLASH 0    // DISABLED: Flash hangs (hardware issue, needs investigation)
 
     #define CONFIG_TMPHM_WDG_ID 0
     #define CONFIG_WDG_NUM_WDGS 1
