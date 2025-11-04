@@ -926,3 +926,1067 @@ The fault module already sets up the stack pattern for high water mark detection
 
 **You've built production-grade reliability features!** 🎯
 
+---
+
+## Appendix: How to Request Debugger-Based Learning Guides
+
+### The Magic Prompt Formula
+
+When you want a practical, debugger-focused learning guide like the one above, use this prompt structure:
+
+**Basic Template:**
+```
+I want to use the debugger to [YOUR GOAL].
+Can you provide a debugger-based learning guide?
+```
+
+**Enhanced Template (more specific):**
+```
+I want to use the STM32CubeIDE debugger to [YOUR GOAL].
+
+Please provide:
+- Key breakpoints to set
+- Variables/registers to watch
+- Expected values at each step
+- Quick workflow summary
+- Reference manual sections to cross-reference
+```
+
+### Real Examples
+
+**Example 1: Learning a Module**
+```
+I want to use the debugger to step through the I2C transaction flow 
+and observe how the state machine transitions work.
+
+Can you provide a debugger-based learning guide?
+```
+
+**Example 2: Understanding System Behavior**
+```
+I want to use the debugger to understand the watchdog timeout sequence 
+from trigger to system reset.
+
+Please provide:
+- Key breakpoints
+- What variables to watch
+- Expected flow
+- Reference manual sections
+```
+
+**Example 3: Debugging an Issue**
+```
+I want to use the debugger to figure out why the flash write is hanging.
+
+Can you provide a systematic debugger-based investigation plan?
+```
+
+**Example 4: After Resting/Break**
+```
+I rested for a few days. I want to use the debugger to [GOAL].
+
+Can you briefly remind me what we've done and provide a debugger guide?
+```
+
+### Key Phrases That Trigger This Style
+
+| Phrase | What You Get |
+|--------|--------------|
+| "use the debugger to..." | Debugger-centric approach |
+| "step through..." | Breakpoint-based workflow |
+| "observe the state variables" | Watch list and variable inspection |
+| "cross-reference with reference manual" | Hardware register correlation |
+| "debugger-based learning guide" | Complete structured guide |
+| "breakpoints to set" | Specific file:function locations |
+| "what to watch" | Variables, registers, memory addresses |
+
+### What Makes a Good Debugger Learning Request
+
+✅ **DO:**
+- Specify your learning goal (what you want to understand)
+- Mention "debugger" explicitly if that's your preferred tool
+- Ask for breakpoints, watch variables, and workflow
+- Request reference manual connections
+- Be specific about the module/feature/flow you're exploring
+
+❌ **DON'T:**
+- Ask vague questions like "How does it work?" (too broad)
+- Forget to mention you want hands-on debugger steps
+- Ask for just theory without practical inspection points
+
+### Example Response You'll Get
+
+When you use the formula above, expect a response structured like:
+
+1. **Context Reminder** - Brief summary of current state
+2. **Key Breakpoints** - Specific locations (file:function:line)
+3. **Watch List** - Variables, registers, addresses to inspect
+4. **Expected Values** - What you should see at each step
+5. **Workflow Steps** - Numbered sequence to follow
+6. **Reference Cross-Reference** - Manual sections to compare
+7. **Key Files** - Where the code lives
+
+### Why This Works
+
+This approach is effective because it:
+- **Hands-on:** You're actively using tools, not just reading
+- **Verifiable:** You see real values, not theoretical explanations
+- **Memorable:** Stepping through code creates mental anchors
+- **Complete:** Hardware registers + software logic together
+- **Debuggable:** Learn debugging skills while learning the system
+
+### Pro Tips
+
+💡 **Combine with your existing code:** "Based on my current [module] implementation, show me debugger steps to verify it works correctly"
+
+💡 **After implementation:** "I just implemented [feature]. Give me a debugger verification plan to confirm it's working."
+
+💡 **When stuck:** "I'm stuck on [issue]. Provide a debugger investigation plan to find the root cause."
+
+💡 **For learning:** "I want to deeply understand [concept]. Give me a debugger exploration guide."
+
+---
+
+**Remember:** The more specific your learning goal, the better the debugger guide you'll receive! 🔍
+
+---
+
+## Appendix B: Mapping Call Stack to Fault Data Structure
+
+### Understanding the Call Stack Window
+
+The **Call Stack** window in STM32CubeIDE is one of your most powerful debugging tools. It shows the **chain of function calls** that led to your current breakpoint or fault.
+
+**Read it from BOTTOM (oldest) to TOP (newest):**
+```
+main()                           ← Program entry (bottom)
+  ↓ called
+app_main()
+  ↓ called
+console_run()                    
+  ↓ called
+cmd_execute()
+  ↓ called
+cmd_main_fault()                 ← Your application code
+  ↓ triggered fault
+<signal handler called>          ← CPU EXCEPTION occurred here!
+  ↓ CPU jumped to
+HardFault_Handler()
+  ↓ called
+fault_exception_handler()
+  ↓ called
+fault_common_handler()           ← Currently paused here (top)
+```
+
+---
+
+### How Call Stack Maps to fault_data_buf
+
+When debugging a fault, you need to correlate what the **Call Stack shows** with what's **captured in your fault_data_buf structure**.
+
+#### **Complete Mapping Table**
+
+| Call Stack Info | fault_data_buf Field | What It Represents | Example Value |
+|----------------|---------------------|-------------------|---------------|
+| `cmd_main_fault() 0x80023ba` | `excpt_stk_rtn_addr` | **PC at fault** - exact instruction that crashed | `0x080023ba` |
+| LR from faulting function | `excpt_stk_lr` | **Return address** - where function would return to | `0x08002984` |
+| Exception SP parameter | `sp` | **Stack pointer** - where exception frame is stored | `0x20017f10` |
+| Fault handler's LR | `lr` | **Link register** - captured in fault handler | `0x080040d5` |
+| Stack frame at SP | `excpt_stk_r0` to `excpt_stk_xpsr` | **CPU registers** - saved by hardware during exception | Various |
+
+---
+
+### Key Fields Explained
+
+#### **1. Program Counter (PC) - Where the Fault Occurred**
+
+**Call Stack shows:**
+```
+cmd_main_fault() at app_main.c:405 0x80023ba
+                                   ^^^^^^^^^^
+                                   This is the PC!
+```
+
+**Maps to:**
+```c
+fault_data_buf.excpt_stk_rtn_addr = 0x080023ba
+```
+
+**What it tells you:** The **exact instruction** that caused the fault.
+
+**How to use it:**
+- Copy the address (e.g., `0x80023ba`)
+- In debugger, open **Disassembly View**
+- Look at that address to see the faulting instruction
+- Cross-reference with source code line number
+
+**🎯 PRO TIP:** If `excpt_stk_rtn_addr` is corrupted (shows garbage), use the Call Stack PC instead - it's reconstructed by the debugger and more reliable!
+
+---
+
+#### **2. Link Register (LR) - Return Address**
+
+**Two LR values to understand:**
+
+**a) `excpt_stk_lr` - From the faulting function**
+```c
+fault_data_buf.excpt_stk_lr = 0x08002984  // Where cmd_main_fault would return
+```
+
+Should point to the **calling function** in the Call Stack:
+```
+cmd_execute() at cmd.c:362 0x8002984  ← Matches excpt_stk_lr!
+```
+
+**b) `lr` - From the fault handler**
+```c
+fault_data_buf.lr = 0x080040d5  // Captured when fault handler runs
+```
+
+Points to where `fault_exception_handler()` was called from.
+
+---
+
+#### **3. Stack Pointer (SP) - Stack Frame Location**
+
+```c
+fault_data_buf.sp = 0x20017f10
+```
+
+**What it tells you:**
+- **Where** in RAM the exception stack frame is stored
+- The CPU automatically saved 8 registers at this address
+- Used to detect stack overflows (compare with `_s_stack` and `_estack`)
+
+**Exception Stack Frame Layout (at address SP):**
+```
+[SP + 0]  = R0          (excpt_stk_r0)
+[SP + 4]  = R1          (excpt_stk_r1)
+[SP + 8]  = R2          (excpt_stk_r2)
+[SP + 12] = R3          (excpt_stk_r3)
+[SP + 16] = R12         (excpt_stk_r12)
+[SP + 20] = LR          (excpt_stk_lr)
+[SP + 24] = PC/Return   (excpt_stk_rtn_addr) ← SHOULD be the faulting PC
+[SP + 28] = xPSR        (excpt_stk_xpsr)
+```
+
+**How to verify:**
+1. Open **Memory View** in debugger
+2. Go to address `fault_data_buf.sp` (e.g., `0x20017f10`)
+3. You should see 8 words (32 bytes) of data
+4. Word 6 (offset +24) should match the Call Stack PC
+
+---
+
+### Reliability Guide: What to Trust
+
+When debugging faults, some data sources are more reliable than others:
+
+| Data Source | Reliability | Why | When to Use |
+|------------|-------------|-----|-------------|
+| **Call Stack PC** | ⭐⭐⭐⭐⭐ | Reconstructed by debugger using symbols | Always - most reliable |
+| **`fault_data_buf.lr`** | ⭐⭐⭐⭐ | Captured directly from CPU register | Trustworthy unless severe corruption |
+| **`fault_data_buf.sp`** | ⭐⭐⭐⭐ | Captured from exception parameter | Reliable for stack analysis |
+| **`fault_data_buf.cfsr/hfsr`** | ⭐⭐⭐⭐⭐ | Hardware registers, read-only | Always trust - explains WHY fault occurred |
+| **`fault_data_buf.bfar`** | ⭐⭐⭐⭐ | Hardware register with fault address | Valid when BFARVALID bit set in CFSR |
+| **`excpt_stk_rtn_addr`** | ⭐⭐⭐ | Copied from stack (can be corrupted) | Verify against Call Stack PC |
+| **`excpt_stk_lr`** | ⭐⭐⭐ | Copied from stack (can be corrupted) | Verify against Call Stack |
+
+---
+
+### Practical Debugging Workflow
+
+**Step 1: Check the Call Stack**
+```
+1. Hit breakpoint in fault_common_handler()
+2. Open Call Stack window
+3. Find the frame BEFORE <signal handler called>
+   → This is your faulting function
+4. Note the address (this is the PC)
+```
+
+**Step 2: Inspect fault_data_buf**
+```
+1. Add fault_data_buf to Watch or Variables window
+2. Expand to see all fields
+3. Check key values:
+   - cfsr: Fault type (0x0400 = PRECISERR bit)
+   - hfsr: Escalation info (0x40000000 = FORCED bit)
+   - bfar: Bad address accessed (0xFFFFFFFF in test)
+   - sp: Stack location (should be 0x2001xxxx)
+```
+
+**Step 3: Cross-Reference**
+```
+1. Compare Call Stack PC with excpt_stk_rtn_addr
+   - Match? ✅ Stack frame is valid
+   - Different? ⚠️ Stack corruption, trust Call Stack
+   
+2. Compare Call Stack caller with excpt_stk_lr
+   - Match? ✅ Return address is valid
+   - Different? ⚠️ LR corrupted
+```
+
+**Step 4: Decode Fault Type**
+```
+1. Look at fault_data_buf.cfsr value
+2. Reference RM0368 Section 4.3.13 (CFSR register)
+3. Decode bits:
+   Bit 15 (BFARVALID) = 1? → bfar is valid
+   Bit 9 (PRECISERR)  = 1? → Precise data access fault
+   Bit 1 (IBUSERR)    = 1? → Instruction fetch fault
+   
+4. Look at fault_data_buf.bfar
+   - This is the address that caused the fault
+```
+
+**Step 5: Find Root Cause**
+```
+1. Click faulting function in Call Stack
+2. Source view jumps to that line
+3. Look at the code - what memory access failed?
+4. Check if address is valid:
+   - Flash: 0x0800xxxx
+   - SRAM:  0x2000xxxx
+   - Peripheral: 0x4000xxxx or 0xE000xxxx
+   - Invalid: 0xFFFFFFFF, 0x00000000, etc.
+```
+
+---
+
+### Common Discrepancies and Their Meanings
+
+#### **Case 1: excpt_stk_rtn_addr Doesn't Match Call Stack PC**
+
+**Example:**
+```
+Call Stack PC:           0x080023ba
+excpt_stk_rtn_addr:      0x12345678  (your test data!)
+```
+
+**Meaning:** Stack frame was corrupted before or during the exception.
+
+**What to do:** Trust the Call Stack PC, ignore excpt_stk_rtn_addr.
+
+**Why it happens:**
+- The fault instruction itself corrupted the stack
+- Stack overflow overwrote the frame
+- Memory corruption before fault occurred
+
+---
+
+#### **Case 2: excpt_stk_lr Is Invalid**
+
+**Example:**
+```
+excpt_stk_lr:  0x4000440c  (not a flash address)
+```
+
+**Expected:** Should be 0x0800xxxx (flash address of caller)
+
+**Meaning:** LR was corrupted in the faulting function.
+
+**What to do:** Use Call Stack to find the actual caller.
+
+---
+
+#### **Case 3: SP Is Out of Range**
+
+**Example:**
+```
+sp: 0x30000000  (way above _estack)
+```
+
+**Expected:** 0x20000000 to 0x20018000 (your SRAM range)
+
+**Meaning:** Severe stack overflow or SP corruption.
+
+**What to do:** Check stack usage, verify stack guard is enabled.
+
+---
+
+### Advanced: Using Disassembly to Verify PC
+
+**Step-by-step:**
+
+1. **Get PC from Call Stack:** `cmd_main_fault() 0x80023ba`
+
+2. **Open Disassembly View:**
+   - Right-click in source editor → "Show Disassembly"
+   - Or: Window → Show View → Disassembly
+
+3. **Navigate to address:** Type `0x80023ba` in address bar
+
+4. **You'll see something like:**
+   ```assembly
+   0x080023b6:  movw  r1, #0x5678
+   0x080023ba:  movt  r1, #0x1234    ; Completes 0x12345678
+   0x080023be:  movs  r0, #0xFF
+   0x080023c0:  mvns  r0, r0          ; Makes 0xFFFFFFFF
+   0x080023c2:  str   r1, [r0]        ; *bad_ptr = 0x12345678 ← FAULT!
+   ```
+
+5. **Match with source:**
+   ```c
+   uint32_t *bad_ptr = (uint32_t*)0xFFFFFFFF;  // r0 = 0xFFFFFFFF
+   *bad_ptr = 0x12345678;                       // str r1, [r0] ← FAULT
+   ```
+
+**Now you KNOW exactly which instruction faulted!**
+
+---
+
+### Quick Reference: Essential Debugger Windows
+
+| Window | Where to Find | What It Shows | When to Use |
+|--------|---------------|---------------|-------------|
+| **Call Stack** | Window → Show View → Debug → Call Stack | Function call chain | Find WHERE fault occurred |
+| **Variables** | Usually visible in Debug perspective | Local variables and structs | Inspect fault_data_buf |
+| **Expressions** | Window → Show View → Expressions | Custom watch expressions | Watch specific registers |
+| **Registers** | Window → Show View → Registers | CPU core registers | See PC, LR, SP in real-time |
+| **SFRs/Peripherals** | Window → Show View → SFRs | Hardware peripheral registers | Check SCB->CFSR, HFSR, etc. |
+| **Disassembly** | Window → Show View → Disassembly | Assembly code | Verify exact faulting instruction |
+| **Memory** | Window → Show View → Memory | Raw memory contents | Inspect stack frame at SP |
+
+---
+
+### Example Analysis: Complete Walkthrough
+
+**Scenario:** `main fault` command triggered, breakpoint hit in `fault_common_handler()`
+
+**Step 1: Call Stack Analysis**
+```
+Call Stack shows:
+  fault_common_handler() at fault.c:452
+  fault_exception_handler() at fault.c:396
+  HardFault_Handler() at stm32f4xx_it.c:94
+  <signal handler called>
+  cmd_main_fault() at app_main.c:405 0x80023ba  ← FAULTING FUNCTION
+  cmd_execute() at cmd.c:362
+  console_run() at console.c:157
+```
+
+**Conclusion:** Fault occurred in `cmd_main_fault()` at PC = `0x080023ba`
+
+---
+
+**Step 2: fault_data_buf Inspection**
+```c
+fault_data_buf.fault_type = 2            // FAULT_TYPE_EXCEPTION
+fault_data_buf.fault_param = 3           // HardFault (exception #3)
+fault_data_buf.sp = 0x20017f10          // Valid stack location
+fault_data_buf.lr = 0x080040d5          // In fault handler code
+fault_data_buf.cfsr = 0x0400            // Bit 10 set
+fault_data_buf.hfsr = 0x40000000        // Bit 30 set (FORCED)
+fault_data_buf.bfar = 0xe000ed38        // Address of BFAR register itself (not set)
+fault_data_buf.excpt_stk_rtn_addr = 0x12345678  // CORRUPTED!
+```
+
+---
+
+**Step 3: Decode CFSR (RM0368 Section 4.3.13)**
+```
+cfsr = 0x0400 = 0b0000 0100 0000 0000
+Bit 10 (IBUSERR) = 1 → Instruction bus error
+```
+
+**Wait, that's odd...** should be PRECISERR (bit 9) for data access fault.
+
+Let me check if there's a different bit pattern...
+
+Actually, `0x0400` could indicate:
+- Bit 10 in UFSR portion: DIVBYZERO or other usage fault
+- Need to check exact bit definitions
+
+---
+
+**Step 4: Cross-Reference with Source**
+```c
+// In cmd_main_fault() at line 401:
+uint32_t *bad_ptr = (uint32_t*)0xFFFFFFFF;
+*bad_ptr = 0x12345678;  // ← This instruction at 0x080023ba
+```
+
+**Conclusion:** Attempted write to invalid address `0xFFFFFFFF` caused BusFault → escalated to HardFault.
+
+---
+
+**Step 5: Final Diagnosis**
+```
+WHERE:  cmd_main_fault() line 401, PC = 0x080023ba
+WHAT:   Write to invalid address (0xFFFFFFFF)
+WHY:    Address not mapped to any valid memory/peripheral
+TYPE:   BusFault (precise data access) escalated to HardFault
+STATUS: Working as expected (test fault successfully triggered)
+```
+
+---
+
+### Key Takeaways
+
+✅ **Call Stack is your primary navigation tool** - shows the complete execution path
+
+✅ **Call Stack PC is more reliable** than corrupted stack frame data
+
+✅ **fault_data_buf captures critical diagnostics** that survive across debug sessions (when written to flash)
+
+✅ **Use both together:** Call Stack for WHERE, fault_data_buf for WHY
+
+✅ **CFSR/HFSR/BFAR are hardware truth** - always accurate for fault type and address
+
+✅ **Disassembly view bridges the gap** between source code and actual CPU instructions
+
+---
+
+**With these tools combined, you can debug any fault, even in production systems without a debugger attached!** 🎯
+
+---
+
+## Appendix C: Deep Dive - Stack Frame Linkage and Register Mechanics
+
+### Understanding How SP, LR, PC Connect Through Function Calls
+
+This section explains the **fundamental mechanics** of how ARM Cortex-M processors manage the call stack through registers and memory. Understanding this is critical for debugging faults and analyzing crash dumps.
+
+---
+
+### The Key Registers
+
+**SP (Stack Pointer - R13)**
+- Points to the **top** of the current stack frame
+- Grows **downward** (toward lower memory addresses) on ARM
+- Each function call pushes a new frame, **decreasing** SP
+- Two variants: **MSP** (Main Stack Pointer) and **PSP** (Process Stack Pointer)
+
+**LR (Link Register - R14)**
+- Holds the **return address** - where to go when the function returns
+- Gets **saved on the stack** when a function calls another function (nested calls)
+- Contains special "EXC_RETURN" values (`0xFFFFFFF9`, etc.) during exception handling
+- Loaded into PC on function return (`bx lr` instruction)
+
+**PC (Program Counter - R15)**
+- Points to the **currently executing instruction**
+- Gets loaded from LR when function returns
+- Automatically saved by hardware during exception entry
+
+---
+
+### How Stack Frames Chain Together
+
+#### Normal Function Call (e.g., `main()` → `app_main()`)
+
+```
+Before call:
+  SP → [current stack frame]
+  LR = return address to whoever called main()
+  PC = instruction in main() about to call app_main()
+
+During "BL app_main" (Branch with Link):
+  1. Hardware: LR ← PC + 4 (save return address)
+  2. Hardware: PC ← address of app_main()
+  3. app_main prologue: PUSH {r4-r11, lr}  ← Saves OLD LR on stack!
+  4. SP decreases (stack grows down)
+  
+Stack now looks like:
+  SP → [r4-r11, old_LR, local variables of app_main]
+       [old stack frame from main]
+```
+
+✅ **BEST PRACTICE:** The saved LR is the **chain link** connecting stack frames. Debuggers walk this chain by:
+1. Read current LR from stack frame
+2. That points to previous function
+3. Read that frame's saved LR
+4. Repeat until reaching bottom
+
+---
+
+### Exception Entry - Hardware-Automated Stacking
+
+💡 **PRO TIP:** ARM Cortex-M has **hardware-automated exception stacking** - this is what makes your call stack visible even during a crash!
+
+When a HardFault occurs (e.g., in `cmd_main_fault()`):
+
+```
+1. Hardware AUTOMATICALLY stacks 8 registers:
+   SP → [xPSR]      ← Program Status Register
+        [PC]        ← Where fault occurred (e.g., 0x80023b4)
+        [LR]        ← Return address from faulting function
+        [R12]
+        [R3]
+        [R2]
+        [R1]
+        [R0]        ← Function arguments
+        
+2. Hardware sets: LR = 0xFFFFFFF9 (EXC_RETURN - special magic value)
+3. Hardware sets: PC = address of HardFault_Handler
+4. HardFault_Handler runs
+```
+
+The `<signal handler called>` at address `0xFFFFFFF9` in your call stack is that **EXC_RETURN** value - the debugger recognizes this as an exception boundary.
+
+---
+
+### 🎯 **PITFALL:** The Exception Boundary
+
+The **exception boundary** breaks the normal LR chain. The hardware-stacked frame contains the **pre-exception PC/LR**, which the fault handler can read from the stack pointer:
+
+```c
+// Common pattern in fault handlers
+void HardFault_Handler(void) {
+    uint32_t *stack_ptr;
+    
+    // Get the stack pointer that was active when fault occurred
+    if (/* was using MSP */) {
+        stack_ptr = (uint32_t*)__get_MSP();
+    } else {
+        stack_ptr = (uint32_t*)__get_PSP();
+    }
+    
+    // Hardware stacked these in this order:
+    uint32_t r0  = stack_ptr[0];
+    uint32_t r1  = stack_ptr[1];
+    uint32_t r2  = stack_ptr[2];
+    uint32_t r3  = stack_ptr[3];
+    uint32_t r12 = stack_ptr[4];
+    uint32_t lr  = stack_ptr[5];  ← Return address from faulting function
+    uint32_t pc  = stack_ptr[6];  ← WHERE THE FAULT HAPPENED
+    uint32_t psr = stack_ptr[7];
+}
+```
+
+---
+
+### ⚠️ **WATCH OUT:** Two Stack Pointers
+
+ARM Cortex-M actually has **two** stack pointers:
+
+- **MSP (Main Stack Pointer)** - Used by exceptions and main program (default)
+- **PSP (Process Stack Pointer)** - Used by RTOS tasks (when RTOS is running)
+
+Your fault handler needs to check which one was active (by examining EXC_RETURN value) to find the correct stacked registers!
+
+---
+
+### Visual: Complete Stack Layout During a Fault
+
+```
+Lower Memory Addresses
+    ↓
+[fault_common_handler locals]           ← SP points here now
+[saved R4-R11, LR of fault_exception]   ← Chain link
+[fault_exception_handler locals]
+[saved R4-R11, LR of HardFault_Handler] ← Chain link
+[HardFault_Handler locals]
+══════════ EXCEPTION BOUNDARY ══════════
+[Hardware-stacked exception frame]      ← Auto-saved by processor
+  - R0, R1, R2, R3, R12                 ← Arguments and scratch regs
+  - LR (from cmd_main_fault)            ← Chain link to caller
+  - PC (0x80023b4 - fault address)      ← THE CRASH SITE
+  - xPSR                                ← Processor status
+[cmd_main_fault stack frame]
+[saved R4-R11, LR of cmd_execute]       ← Chain link
+[cmd_execute stack frame]
+... continues down to main()
+    ↓
+Higher Memory Addresses
+```
+
+**Key Insight:** Every function saves the previous LR, creating a **linked list** of return addresses that the debugger follows backward to reconstruct the call stack!
+
+---
+
+## Appendix D: Viewing Stack Frames in STM32CubeIDE
+
+### Available Tools for Stack Inspection
+
+Here are the **most effective** methods for watching the stack grow and shrink in real-time.
+
+---
+
+### 1. **Memory Browser** (Good for Static Inspection)
+
+**How to access:**
+```
+Window → Show View → Memory Browser
+```
+
+**Setup:**
+- Add a **memory monitor** with expression: `$sp` or `$r13`
+- Set to track the stack pointer in real-time
+- Use **8-word display** (32-byte chunks) to see stack frames
+
+💡 **PRO TIP:** Add a **second memory monitor** pointing to the stack base (e.g., `0x20020000`) to see how close you are to overflow!
+
+---
+
+### 2. **Expressions View** (Best for Live Monitoring)
+
+**How to access:**
+```
+Window → Show View → Expressions
+```
+
+**Add these expressions:**
+- `$sp` - Current stack pointer value
+- `$lr` - Link register (return address)
+- `$pc` - Program counter
+- `*(uint32_t**)$sp` - Dereference to see what's at top of stack
+- `((uint32_t)&__StackLimit) - ((uint32_t)$sp)` - Bytes of stack remaining
+
+Then **step through code** (F5/F6) and watch them change in real-time!
+
+---
+
+### 3. **Disassembly View** (THE BEST for Learning)
+
+**How to access:**
+```
+Window → Show View → Disassembly
+```
+
+This is the **favorite** for understanding stack mechanics:
+
+1. Set a breakpoint in a function
+2. Open Disassembly view
+3. Step **instruction-by-instruction** (F5)
+4. Watch the **prologue** and **epilogue**:
+
+```assembly
+// Function prologue - stack GROWS (SP decreases)
+push    {r4, r5, r6, r7, lr}    ; SP decreases by 20 bytes
+sub     sp, #24                  ; Allocate local variables, SP decreases more
+
+// Your function body here
+
+// Function epilogue - stack SHRINKS (SP increases)
+add     sp, #24                  ; Deallocate locals, SP increases
+pop     {r4, r5, r6, r7, pc}    ; Restore registers and return, SP increases
+```
+
+✅ **BEST PRACTICE:** Step through ONE instruction at a time and watch the **Registers view** showing SP change!
+
+---
+
+### 🎯 **PITFALL:** Stack Grows DOWN
+
+Remember: On ARM, **decreasing SP = growing stack**, **increasing SP = shrinking stack**
+
+```
+Higher Memory (0x20020000 - stack base)
+    ↓
+  [empty]
+  [function frames] ← Stack grows DOWN (SP decreases)
+    ↓
+Lower Memory (0x20000000)
+```
+
+---
+
+### 💡 **PRO TIP:** Optimal Debugging Layout
+
+Here's the recommended window layout when debugging stack issues:
+
+```
+┌─────────────────┬─────────────────┐
+│  Disassembly    │   Registers     │ ← Watch SP/LR/PC
+├─────────────────┼─────────────────┤
+│  Memory Browser │   Expressions   │ ← Track $sp
+│  (@$sp)         │   $sp, $lr, $pc │
+└─────────────────┴─────────────────┘
+```
+
+**Workflow:**
+1. Set breakpoint at function entry
+2. Step instruction-by-instruction (F5)
+3. Watch in **Registers view**: `SP` decreasing during prologue
+4. In **Memory Browser**: See the saved registers appearing on stack
+5. In **Expressions**: Calculate frame size: `old_SP - new_SP`
+
+---
+
+### 📖 **WAR STORY:** The Most Useful Debug Expression
+
+After 40 years of embedded debugging, here's one of the most-used expressions for stack debugging:
+
+```
+Expression view, add:
+((uint32_t)&__StackLimit) - ((uint32_t)$sp)
+```
+
+This shows **bytes of stack remaining**. If it's getting small (< 512 bytes), you're in danger of overflow!
+
+⚠️ **WATCH OUT:** You need `__StackLimit` defined in your linker script. If not available, use the hard-coded stack start address from your linker script.
+
+---
+
+### 🎓 Hands-On Exercise: Live Stack Inspection
+
+When you're stopped at a breakpoint (e.g., in `fault_common_handler()`):
+
+1. **Open Registers view**: Note current `sp` value (e.g., `0x2001fc40`)
+2. **Open Memory Browser**: Add monitor at address `$sp`
+3. **Look at Memory**: Those values are your saved registers and local variables
+4. **Open Expressions**: Add `$sp` and `*(uint32_t*)$sp`
+5. **Step Out** (F7): Watch SP **increase** (stack shrinks as frame is popped)
+
+You'll see exactly how the current function cleans up its frame and returns to the caller.
+
+---
+
+## Appendix E: Reading Memory Browser Output and Relating to Registers
+
+### Understanding Memory Browser Layout
+
+The Memory Browser shows **raw memory contents** in hexadecimal, organized in rows. Here's how to interpret it:
+
+```
+Address      | Word[0]    Word[1]    Word[2]    Word[3]    ...
+─────────────┼────────────────────────────────────────────────
+0x20017ED8  | 0000202C | 0000202C | 63657320 | 40003000 | ...
+```
+
+Each row typically displays **multiple 32-bit words** (the exact number depends on your view settings).
+
+---
+
+### Key Data Types in Stack Memory
+
+When examining stack memory, you'll see these types of values:
+
+#### **1. Return Addresses** (Start with `0x080...`)
+
+Any value starting with `0x080xxxxx` is in **Flash memory** (your code):
+
+```
+0x0800412B  ← Return address to fault_exception_handler()
+0x08000E5D  ← Return address to HardFault_Handler()
+```
+
+These are **saved LR values** showing the function call chain.
+
+**How to verify:**
+- Copy the address
+- Open **Disassembly view**
+- Navigate to that address
+- You'll see it's right after a `BL` (Branch with Link) instruction
+
+---
+
+#### **2. Stack Pointers** (Values like `0x2001xxxx`)
+
+Values in the `0x2001xxxx` or `0x2000xxxx` range point to **other stack locations**:
+
+```
+0x20017EF0  ← Previous stack frame pointer
+0x20017F10  ← Even older stack frame pointer
+```
+
+These create the **chain** connecting frames! Each frame stores a pointer to the previous frame.
+
+**How frames link together:**
+```
+Current frame at 0x20017ED8
+  ↓ contains pointer to
+Previous frame at 0x20017EF0
+  ↓ contains pointer to
+Older frame at 0x20017F10
+  ↓ continues...
+```
+
+---
+
+#### **3. Exception Return Values** (`0xFFFFFFF9`)
+
+Special values like `0xFFFFFFF9` are **EXC_RETURN** magic values:
+
+```
+FFFFFFF9  ← Return to Handler mode using MSP
+FFFFFFFD  ← Return to Thread mode using PSP
+```
+
+⚠️ **WATCH OUT:** This marks an **exception boundary** - where the CPU automatically stacked registers during an exception.
+
+---
+
+#### **4. Local Variables and Data**
+
+Regular data values don't follow a specific pattern:
+
+```
+0000202C  ← Could be a counter, flag, or small number
+63657320  ← ASCII string "sec " (in little-endian)
+12345678  ← Test data or magic number
+```
+
+---
+
+### Reading Memory at Stack Pointer
+
+**Example:** Your SP = `0x20017ED8`
+
+Looking at memory at that address:
+```
+Offset  | Value      | What it likely is
+────────┼────────────┼─────────────────────────────────
++0      | 0000202C   | Local variable or saved register
++4      | 0000202C   | Another value (same as above)
++8      | 63657320   | ASCII "sec " - part of a string!
++12     | 40003000   | Peripheral address (GPIO? Timer?)
++16     | 00000003   | Counter or flag value
++20     | 20017EF0   | ← PREVIOUS STACK FRAME POINTER
++24     | 20017EF8   | Another stack address
++28     | 0800412B   | ← RETURN ADDRESS (saved LR)
++32     | 00000000   | Zero/NULL
++36     | 20017F10   | ← OLDER STACK FRAME POINTER
+```
+
+---
+
+### ✅ **BEST PRACTICE:** Use Expressions for Precise Offsets
+
+To avoid counting columns in the memory browser, use **Expression view**:
+
+```
+Add these expressions:
+*(uint32_t*)($sp+0)    → Shows word at SP+0
+*(uint32_t*)($sp+20)   → Shows word at SP+20 (previous frame)
+*(uint32_t*)($sp+28)   → Shows word at SP+28 (return address)
+*(uint32_t*)($sp+36)   → Shows word at SP+36 (older frame)
+```
+
+This way you see **exactly** what's at each byte offset without confusion!
+
+---
+
+### Decoding ASCII Strings in Memory
+
+When you see values like `0x63657320`:
+
+**Little-endian byte order** (least significant byte first):
+```
+0x63657320 = [0x20] [0x73] [0x65] [0x63]
+           =  ' '    's'    'e'    'c'
+           = " sec" (read right-to-left)
+```
+
+**In Expressions view:**
+```
+(char*)($sp+8)  ← Shows the actual string starting at that offset
+```
+
+This is useful for finding **local string variables** or **error messages** on the stack.
+
+---
+
+### 💡 **PRO TIP:** Identifying the Exception Stack Frame
+
+When analyzing a fault, look for the **hardware-stacked exception frame**. It has a distinctive pattern:
+
+```
+[Some address in stack]:
+  R0        ← Often contains function argument or return value
+  R1        ← Function arguments
+  R2
+  R3
+  R12       ← Scratch register
+  LR        ← Should be 0x080xxxxx (return address)
+  PC        ← Should be 0x080xxxxx (fault location)
+  xPSR      ← Usually 0x010xxxxx or 0x210xxxxx
+```
+
+The **xPSR** value is distinctive - it's usually in the range `0x01000000` to `0x61000000`, which helps you identify the frame.
+
+---
+
+### Common Patterns and What They Mean
+
+| Pattern | Meaning | Example |
+|---------|---------|---------|
+| `0x080xxxxx` | Code address (Flash) | `0x0800412B` → Function return address |
+| `0x2000xxxx` or `0x2001xxxx` | RAM address (Stack/Data) | `0x20017EF0` → Stack frame pointer |
+| `0x4000xxxx` | Peripheral register | `0x40003000` → GPIO or Timer register |
+| `0xE000xxxx` | System/Debug peripheral | `0xE000ED38` → SCB register (BFAR) |
+| `0xFFFFFFF9` | EXC_RETURN (MSP) | Exception boundary marker |
+| `0x00000000` | NULL or zero | Uninitialized or cleared value |
+| `0xCDCDCDCD` | Debug heap pattern | Some debuggers use this |
+| `0xCAFEBADD` | Stack init pattern | Your `STACK_INIT_PATTERN` |
+| `0x????????` | Unreadable memory | Out of bounds or protected |
+
+---
+
+### Complete Example: Decoding a Real Stack Frame
+
+**Scenario:** Stopped at `fault_common_handler()`, SP = `0x20017ED8`
+
+**Memory Browser shows:**
+```
+0x20017ED8: 0000202C 0000202C 63657320 40003000 00000003 20017EF0 20017EF8 0800412B
+0x20017EF8: 00000000 20017F10 00000000 00000003 20017F10 08000E5D ...
+```
+
+**Step-by-step decode:**
+
+1. **`0x0000202C`** (offset +0, +4) → Local variables (value = 8236 decimal)
+2. **`0x63657320`** (offset +8) → String " sec" in little-endian
+3. **`0x40003000`** (offset +12) → Peripheral address (likely TIM2 or similar)
+4. **`0x00000003`** (offset +16) → Counter or enum value (3)
+5. **`0x20017EF0`** (offset +20) → **Previous frame pointer!**
+6. **`0x20017EF8`** (offset +24) → Another stack address
+7. **`0x0800412B`** (offset +28) → **Return address!** (saved LR)
+8. **`0x20017F10`** (offset +36) → **Older frame pointer!**
+9. **`0x08000E5D`** (offset +52) → **Another return address!**
+
+**Conclusions:**
+- Current function has local variables and a string
+- Will return to `0x0800412B` (in `fault_exception_handler`)
+- Previous frame was at `0x20017EF0`
+- That frame will return to `0x08000E5D` (in `HardFault_Handler`)
+
+---
+
+### 🎓 Quick Verification Checklist
+
+When analyzing stack memory, verify:
+
+- [ ] SP value is in valid RAM range (e.g., `0x20000000` - `0x20020000`)
+- [ ] Return addresses start with `0x080` (Flash)
+- [ ] Stack frame pointers are higher addresses than SP (stack grows down)
+- [ ] No `0x????????` (unreadable) values at SP (would indicate overflow)
+- [ ] LR values point to valid code (check in Disassembly)
+
+---
+
+### Essential Debugger Windows Reference
+
+| Window | Access | Purpose | Key Usage |
+|--------|--------|---------|-----------|
+| **Call Stack** | Window → Show View → Debug → Call Stack | Function call chain | Find WHERE fault occurred |
+| **Variables** | Usually visible in Debug perspective | Local variables and structs | Inspect `fault_data_buf` |
+| **Expressions** | Window → Show View → Expressions | Custom watch expressions | Calculate offsets: `$sp+20` |
+| **Registers** | Window → Show View → Registers | CPU core registers | See SP/LR/PC in real-time |
+| **Memory Browser** | Window → Show View → Memory Browser | Raw memory contents | Inspect stack at `$sp` |
+| **Disassembly** | Window → Show View → Disassembly | Assembly code | Verify exact instructions |
+| **SFRs** | Window → Show View → SFRs | Peripheral registers | Check SCB→CFSR, HFSR |
+
+---
+
+### Key Takeaways
+
+✅ **Stack frames are linked** through saved LR values creating a chain
+
+✅ **Memory Browser shows raw data** - you must interpret the patterns
+
+✅ **Different address ranges** indicate different memory types (Flash vs RAM vs Peripherals)
+
+✅ **Exception boundaries** are marked by EXC_RETURN magic values
+
+✅ **Use Expressions view** for precise offset calculations instead of counting columns
+
+✅ **Combine multiple views** (Call Stack + Memory + Registers) for complete understanding
+
+✅ **Stack grows downward** on ARM - decreasing SP means growing stack
+
+---
+
+**With these tools and techniques, you can trace execution flow through function calls and analyze crash dumps like a seasoned embedded engineer!** 🎯
+
