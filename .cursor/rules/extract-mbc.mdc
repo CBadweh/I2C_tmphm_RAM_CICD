@@ -37,6 +37,46 @@ Create a reference document with exactly these sections:
 - What it provides to other modules
 - Include function signatures and brief implementations
 
+### 6. State Variables (Hierarchical Tree Format)
+- Show module's state structure(s) in hierarchical tree format
+- Break down each field with purpose and lifecycle
+- Include enums/flags with all possible values
+- Show relationships between state variables
+- Explain when/where each field is set/cleared
+- Highlight critical constraints or ordering requirements
+
+**Tree Format Example:**
+```
+Module State (struct module_state) ← Top-level description
+
+│
+├── config_field (type) ← What it holds
+│   ├── Possible value 1 ← When this happens
+│   ├── Possible value 2 ← When this happens
+│   └── Purpose: Why this field exists
+│
+├── nested_concept ← Group related fields
+│   ├── field_a (type) ← Description
+│   │   ├── Set by: function_name()
+│   │   ├── Cleared by: other_function()
+│   │   └── Purpose: What it does
+│   │
+│   └── field_b (type) ← Description
+│       └── ⚠️ CRITICAL: Important constraint
+│
+└── state_machine_field (enum) ← Current state
+    ├── STATE_IDLE (0) ← Ready state
+    │   └── Transitions from: completion functions
+    ├── STATE_ACTIVE (1) ← Working state
+    │   └── Next: STATE_DONE when condition met
+    └── STATE_DONE (2) ← Finished state
+        └── Purpose: Track operation progress
+
+Static Variables ← Module-private storage
+static struct module_state states[NUM_INSTANCES];
+    └── Purpose: One state per hardware instance
+```
+
 ## Formatting Rules
 
 ```c
@@ -71,6 +111,9 @@ struct example {
 - State machine transitions
 - Critical relationships between components
 - Actual working code, not pseudocode
+- Detailed state variable breakdown (hierarchical tree format)
+- Field lifecycle: when set/cleared, by which functions
+- State transitions with triggers and conditions
 
 ## Target: One-Page Mental Model
 
@@ -79,6 +122,8 @@ Goal: After reading, engineer can:
 2. Implement it on different hardware
 3. Debug issues by understanding the pattern
 4. Return months later and quickly recall how it works
+5. Understand state variable lifecycle and relationships
+6. Know which functions modify which state fields
 
 ## Example Output Format
 
@@ -108,6 +153,9 @@ Goal: After reading, engineer can:
 
 ## Dependencies
 [What it needs from other modules - with code]
+
+## State Variables
+[Hierarchical tree breakdown of module state structure]
 
 ## Key Concept Diagram
 [ASCII art showing flow/hierarchy if helpful]

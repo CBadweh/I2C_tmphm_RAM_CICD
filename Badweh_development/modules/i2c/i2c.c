@@ -529,107 +529,87 @@ static void i2c_interrupt(enum i2c_instance_id instance_id,
     {
         switch (st->state) {
         
-            // ------ WRITE STATES ------
+            // ===== WRITE SEQUENCE: 3 States =====
             
             case STATE_MSTR_WR_GEN_START:
-                // START condition sent?
-            	LWL("i2c_state", 1, LWL_1(st->state));
-            	LWL("i2c_start", 0);
+                // HW sent START? Check SB (Start Bit) flag
                 if (sr1 & LL_I2C_SR1_SB) {
-                    LWL("I2C_WR_START", 2, LWL_1(st->dest_addr), LWL_1(st->msg_len));
-                    // Write address with W bit (bit 0 = 0)
+                    // Send 7-bit address + W bit (0) → becomes 8-bit on bus
                     st->i2c_reg_base->DR = st->dest_addr << 1;
-                    st->state = STATE_MSTR_WR_SENDING_ADDR;
+                    st->state = STATE_MSTR_WR_SENDING_ADDR;  // Next state
                 }
                 break;
 
             case STATE_MSTR_WR_SENDING_ADDR:
-                // Address ACKed?
-            	LWL("i2c_state", 1, LWL_1(st->state));
+                // Did slave ACK the address? Check ADDR flag
                 if (sr1 & LL_I2C_SR1_ADDR) {
-                    LWL("I2C_WR_ADDR_ACK", 1, LWL_1(st->dest_addr));
-                    // Clear ADDR flag by reading SR2
-                    (void)st->i2c_reg_base->SR2;
-
-                    if (st->msg_len == 0) {
-                        // Zero-byte write, just stop
-                        op_stop_success(st, true);
-                    } else {
-                        // Send first data byte
-                        st->state = STATE_MSTR_WR_SENDING_DATA;
-                        if (sr1 & LL_I2C_SR1_TXE) {
-                            st->i2c_reg_base->DR = st->msg_bfr[st->msg_bytes_xferred++];
-                        }
-                    }
+                    (void)st->i2c_reg_base->SR2;  // MUST read SR2 to clear ADDR flag (HW requirement!)
+                    
+                    // Start sending data bytes
+                    st->state = STATE_MSTR_WR_SENDING_DATA;
+                    st->i2c_reg_base->DR = st->msg_bfr[st->msg_bytes_xferred++];  // Send first byte
                 }
                 break;
 
             case STATE_MSTR_WR_SENDING_DATA:
-                // Ready to send next byte?
-            	LWL("i2c_state", 1, LWL_1(st->state));
+                // HW ready for next byte? Check TXE (TX Empty) or BTF (Byte Transfer Finished)
                 if (sr1 & (LL_I2C_SR1_TXE | LL_I2C_SR1_BTF)) {
+                    
                     if (st->msg_bytes_xferred < st->msg_len) {
-                        // Send next byte
+                        // More bytes to send → write next byte to DR register
                         st->i2c_reg_base->DR = st->msg_bfr[st->msg_bytes_xferred++];
-                    } else {
-                        // All bytes sent, wait for BTF before STOP
-                        if (sr1 & LL_I2C_SR1_BTF) {
-                            LWL("I2C_WR_DONE", 1, LWL_1(st->msg_len));
-                            op_stop_success(st, true);
-                        }
+                        
+                    } else if (sr1 & LL_I2C_SR1_BTF) {
+                        // All bytes sent AND last byte ACKed (BTF set) → Done!
+                        op_stop_success(st, true);  // Generate STOP, disable IRQs, go to IDLE
                     }
                 }
                 break;
 
-            // ------ READ STATES ------
+            // ===== READ SEQUENCE: 3 States =====
             
             case STATE_MSTR_RD_GEN_START:
-                // START condition sent?
-            	LWL("i2c_state", 1, LWL_1(st->state));
+                // HW sent START? Check SB (Start Bit) flag
                 if (sr1 & LL_I2C_SR1_SB) {
-                    LWL("I2C_RD_START", 2, LWL_1(st->dest_addr), LWL_1(st->msg_len));
-                    // Write address with R bit (bit 0 = 1)
+                    // Send 7-bit address + R bit (1) → becomes 8-bit on bus
                     st->i2c_reg_base->DR = (st->dest_addr << 1) | 1;
-                    st->state = STATE_MSTR_RD_SENDING_ADDR;
+                    st->state = STATE_MSTR_RD_SENDING_ADDR;  // Next state
                 }
                 break;
 
             case STATE_MSTR_RD_SENDING_ADDR:
-                // Address ACKed?
-            	LWL("i2c_state", 1, LWL_1(st->state));
+                // Did slave ACK the address? Check ADDR flag
                 if (sr1 & LL_I2C_SR1_ADDR) {
-                    LWL("I2C_RD_ADDR_ACK", 1, LWL_1(st->dest_addr));
+                    // Set ACK/NACK mode for incoming bytes (multi-byte vs single-byte handling)
                     if (st->msg_len == 1) {
-                        // Single byte read: NACK it
-                        LL_I2C_AcknowledgeNextData(st->i2c_reg_base, LL_I2C_NACK);
+                        LL_I2C_AcknowledgeNextData(st->i2c_reg_base, LL_I2C_NACK);  // NACK single byte
                     } else {
-                        // Multi-byte read: ACK them
-                        LL_I2C_AcknowledgeNextData(st->i2c_reg_base, LL_I2C_ACK);
+                        LL_I2C_AcknowledgeNextData(st->i2c_reg_base, LL_I2C_ACK);   // ACK multi-byte
                     }
-                    // Clear ADDR flag by reading SR2
-                    (void)st->i2c_reg_base->SR2;
                     
+                    (void)st->i2c_reg_base->SR2;  // MUST read SR2 to clear ADDR flag (HW requirement!)
+                    
+                    // For single byte: generate STOP early (I2C spec requirement)
                     if (st->msg_len == 1) {
-                        // For single byte, generate STOP now
                         LL_I2C_GenerateStopCondition(st->i2c_reg_base);
                     }
-                    st->state = STATE_MSTR_RD_READING_DATA;
+                    
+                    st->state = STATE_MSTR_RD_READING_DATA;  // Next state
                 }
                 break;
 
             case STATE_MSTR_RD_READING_DATA:
-                // Data byte received?
-            	LWL("i2c_state", 1, LWL_1(st->state));
+                // HW received data? Check RXNE (RX Not Empty) flag
                 if (sr1 & LL_I2C_SR1_RXNE) {
-                    // Read the byte
+                    // Read byte from DR register into buffer
                     st->msg_bfr[st->msg_bytes_xferred++] = st->i2c_reg_base->DR;
                     
-                    // Check if this was the last byte
                     if (st->msg_bytes_xferred >= st->msg_len) {
-                        LWL("I2C_RD_DONE", 1, LWL_1(st->msg_len));
+                        // All bytes received → Done!
                         op_stop_success(st, st->msg_len > 1);  // STOP already sent for single byte
+                        
                     } else if (st->msg_bytes_xferred == st->msg_len - 1) {
-                        // Next byte is last: NACK it
+                        // Next byte is the last one → NACK it and send STOP
                         LL_I2C_AcknowledgeNextData(st->i2c_reg_base, LL_I2C_NACK);
                         LL_I2C_GenerateStopCondition(st->i2c_reg_base);
                     }
