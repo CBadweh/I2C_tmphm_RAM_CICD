@@ -1,17 +1,16 @@
 /*
- * HAPPY PATH I2C DRIVER - Pure Learning Version
+ * HAPPY PATH I2C DRIVER - Maximum Simplicity Version
  * 
- * ALL ERROR HANDLING REMOVED - Focus on the core logic only:
+ * ALL ABSTRACTIONS REMOVED - Every step is explicit and visible:
+ * - No helper functions (start_op, op_stop_success)
+ * - No error handling
+ * - All code inlined for direct, linear reading
+ * 
+ * LEARNING PATH:
  * 1. Reserve/Release (resource sharing)
- * 2. Write/Read APIs (non-blocking start)
+ * 2. Write/Read APIs (see entire flow in one place)
  * 3. State machine (7 states)
- * 4. Interrupt handler (drives state transitions)
- * 
- * Assumptions:
- * - All operations succeed
- * - Bus is always available
- * - Slave always ACKs
- * - No timeouts needed (kept timer for structure only)
+ * 4. Interrupt handler (drives state transitions, see cleanup inline)
  */
 
 #include <stdint.h>
@@ -50,7 +49,7 @@ enum states {
 };
 
 enum interrupt_type {
-    INTER_TYPE_EVT,                 // Event interrupt (SB, ADDR, TXE, RXNE, etc.)
+    INTER_TYPE_EVT,                 // Event interrupt
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -76,15 +75,11 @@ struct i2c_state {
 // PRIVATE FUNCTIONS
 ////////////////////////////////////////////////////////////////////////////////
 
-static void start_op(enum i2c_instance_id instance_id, uint32_t dest_addr,
-                     uint8_t* msg_bfr, uint32_t msg_len,
-                     enum states init_state);
 static void i2c_interrupt(enum i2c_instance_id instance_id,
                           enum interrupt_type inter_type);
-static void op_stop_success(struct i2c_state* st, bool set_stop);
 
 ////////////////////////////////////////////////////////////////////////////////
-// PRIVATE VARIABLES - One state per I2C instance
+// PRIVATE VARIABLES
 ////////////////////////////////////////////////////////////////////////////////
 
 static struct i2c_state i2c_states[I2C_NUM_INSTANCES];
@@ -162,21 +157,75 @@ void i2c_release(enum i2c_instance_id instance_id)
 }
 
 /*
- * WRITE - Non-blocking start of write operation
+ * WRITE - Start write operation (NO HELPER FUNCTIONS - all inline)
+ * 
+ * You can read the ENTIRE write setup in one place:
+ * 1. Save parameters (address, buffer, length)
+ * 2. Set state to WR_GEN_START
+ * 3. Enable peripheral
+ * 4. Generate START
+ * 5. Enable interrupts
+ * 
+ * Then the interrupt handler takes over (see i2c_interrupt below)
  */
 void i2c_write(enum i2c_instance_id instance_id, uint32_t dest_addr, 
                uint8_t* msg_bfr, uint32_t msg_len)
 {
-    start_op(instance_id, dest_addr, msg_bfr, msg_len, STATE_MSTR_WR_GEN_START);
+    struct i2c_state* st = &i2c_states[instance_id];
+    
+    // Save operation parameters
+    st->dest_addr = dest_addr;
+    st->msg_bfr = msg_bfr;
+    st->msg_len = msg_len;
+    st->msg_bytes_xferred = 0;
+
+    // Set initial state
+    st->state = STATE_MSTR_WR_GEN_START;
+
+    // Enable I2C peripheral
+    LL_I2C_Enable(st->i2c_reg_base);
+    
+    // Generate START condition
+    LL_I2C_GenerateStartCondition(st->i2c_reg_base);
+
+    // Enable interrupts (rest happens in interrupt handler!)
+    ENABLE_ALL_INTERRUPTS(st);
 }
 
 /*
- * READ - Non-blocking start of read operation
+ * READ - Start read operation (NO HELPER FUNCTIONS - all inline)
+ * 
+ * You can read the ENTIRE read setup in one place:
+ * 1. Save parameters (address, buffer, length)
+ * 2. Set state to RD_GEN_START
+ * 3. Enable peripheral
+ * 4. Generate START
+ * 5. Enable interrupts
+ * 
+ * Then the interrupt handler takes over (see i2c_interrupt below)
  */
 void i2c_read(enum i2c_instance_id instance_id, uint32_t dest_addr,
               uint8_t* msg_bfr, uint32_t msg_len)
 {
-    start_op(instance_id, dest_addr, msg_bfr, msg_len, STATE_MSTR_RD_GEN_START);
+    struct i2c_state* st = &i2c_states[instance_id];
+    
+    // Save operation parameters
+    st->dest_addr = dest_addr;
+    st->msg_bfr = msg_bfr;
+    st->msg_len = msg_len;
+    st->msg_bytes_xferred = 0;
+
+    // Set initial state
+    st->state = STATE_MSTR_RD_GEN_START;
+
+    // Enable I2C peripheral
+    LL_I2C_Enable(st->i2c_reg_base);
+    
+    // Generate START condition
+    LL_I2C_GenerateStartCondition(st->i2c_reg_base);
+
+    // Enable interrupts (rest happens in interrupt handler!)
+    ENABLE_ALL_INTERRUPTS(st);
 }
 
 /*
@@ -203,43 +252,12 @@ void I2C3_EV_IRQHandler(void)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// PRIVATE (STATIC) FUNCTIONS - The Real Work Happens Here
+// INTERRUPT HANDLER - THE HEART OF THE DRIVER
+// 
+// NO HELPER FUNCTIONS - all cleanup code inlined directly where it happens
+// You can see the COMPLETE flow for each state in one place
 ////////////////////////////////////////////////////////////////////////////////
 
-/*
- * START OPERATION - Common code for read and write
- * This is NON-BLOCKING! It starts the operation and returns immediately.
- */
-static void start_op(enum i2c_instance_id instance_id, uint32_t dest_addr,
-                     uint8_t* msg_bfr, uint32_t msg_len,
-                     enum states init_state)
-{
-    struct i2c_state* st = &i2c_states[instance_id];
-    
-    // Save operation parameters
-    st->dest_addr = dest_addr;
-    st->msg_bfr = msg_bfr;
-    st->msg_len = msg_len;
-    st->msg_bytes_xferred = 0;
-
-    // Set initial state
-    st->state = init_state;
-
-    // Enable I2C peripheral
-    LL_I2C_Enable(st->i2c_reg_base);
-    
-    // Generate START condition
-    LL_I2C_GenerateStartCondition(st->i2c_reg_base);
-
-    // Enable interrupts (rest happens in interrupt handler!)
-    ENABLE_ALL_INTERRUPTS(st);
-}
-
-/*
- * I2C INTERRUPT HANDLER - THE HEART OF THE DRIVER
- * 
- * The state machine processes one step per interrupt.
- */
 static void i2c_interrupt(enum i2c_instance_id instance_id,
                           enum interrupt_type inter_type)
 {
@@ -279,8 +297,11 @@ static void i2c_interrupt(enum i2c_instance_id instance_id,
                     st->i2c_reg_base->DR = st->msg_bfr[st->msg_bytes_xferred++];
                     
                 } else if (sr1 & LL_I2C_SR1_BTF) {
-                    // All bytes sent → Done!
-                    op_stop_success(st, true);
+                    // All bytes sent → DONE! Clean up inline (no helper function)
+                    DISABLE_ALL_INTERRUPTS(st);
+                    LL_I2C_GenerateStopCondition(st->i2c_reg_base);
+                    LL_I2C_Disable(st->i2c_reg_base);
+                    st->state = STATE_IDLE;
                 }
             }
             break;
@@ -324,8 +345,13 @@ static void i2c_interrupt(enum i2c_instance_id instance_id,
                 st->msg_bfr[st->msg_bytes_xferred++] = st->i2c_reg_base->DR;
                 
                 if (st->msg_bytes_xferred >= st->msg_len) {
-                    // All bytes received → Done!
-                    op_stop_success(st, st->msg_len > 1);
+                    // All bytes received → DONE! Clean up inline (no helper function)
+                    DISABLE_ALL_INTERRUPTS(st);
+                    if (st->msg_len > 1) {  // STOP already sent for single byte
+                        LL_I2C_GenerateStopCondition(st->i2c_reg_base);
+                    }
+                    LL_I2C_Disable(st->i2c_reg_base);
+                    st->state = STATE_IDLE;
                     
                 } else if (st->msg_bytes_xferred == st->msg_len - 1) {
                     // Next byte is the last one → NACK it and send STOP
@@ -338,20 +364,6 @@ static void i2c_interrupt(enum i2c_instance_id instance_id,
         default:
             break;
     }
-}
-
-/*
- * OPERATION SUCCESS - Clean up and return to IDLE
- */
-static void op_stop_success(struct i2c_state* st, bool set_stop)
-{
-    DISABLE_ALL_INTERRUPTS(st);
-    
-    if (set_stop)
-        LL_I2C_GenerateStopCondition(st->i2c_reg_base);
-    
-    LL_I2C_Disable(st->i2c_reg_base);
-    st->state = STATE_IDLE;
 }
 
 /*
