@@ -21,3 +21,78 @@ Before answering questions:
 3. Only add supplementary information if it directly supports the plan's content
 
 The goal is consistency and reinforcement, not variety. Stay on the path laid out in the lesson plan.
+
+---
+
+## When Creating Lesson Plans: Progressive Complexity Approach
+
+When tasked with creating new lesson plans, intelligently apply the **"Happy Path First"** methodology:
+
+### Core Principle: Pareto (80/20) Applied to Learning
+- **20% of concepts** provide **80% of understanding**
+- **20% of code (happy path)** reveals **80% of system behavior**
+- Focus on the essential core first, then layer complexity
+
+### Four-Phase Learning Progression:
+
+**Phase 1: Happy Path Only**
+- Remove error handling
+- Remove logging/debugging code
+- Assume all operations succeed
+- **Goal:** Crystal clear understanding of core flow
+- **Reasoning:** Fits in working memory (7±2 items), builds strong mental model
+
+**Phase 2: Add State Awareness**
+- Introduce state machines and transitions
+- Show *where* in the process things happen
+- **Goal:** Understand system structure
+- **Reasoning:** Now learner can see where errors *could* occur
+
+**Phase 3: Add Error Handling**
+- Introduce "what if X fails?" scenarios
+- Add timeout protection, recovery
+- **Goal:** Understand failure modes
+- **Reasoning:** Error handling makes sense because core flow is understood
+
+**Phase 4: Production Features**
+- Logging, performance optimization
+- Edge cases, resource management
+- **Goal:** Make it robust
+- **Reasoning:** Refinement after fundamentals are solid
+
+### When to Apply This Approach:
+
+✅ **USE when:**
+- Teaching complex systems (drivers, protocols, state machines)
+- Learner is encountering concept for the first time
+- Code has significant error handling that obscures core logic
+- Multiple interacting subsystems (I2C + timers + interrupts)
+
+⚠️ **CONSIDER ALTERNATIVES when:**
+- Teaching debugging skills (errors are the focus)
+- Safety-critical code (errors cannot be ignored)
+- Learner explicitly requests comprehensive view
+- Concept is simple enough that phases would feel artificial
+
+### Creating Minimal Working Examples:
+
+For each lesson phase, provide:
+1. **Stripped-down code** showing only relevant concepts
+2. **Clear comments** explaining what was removed and why
+3. **Build instructions** showing it actually works
+4. **Next steps** pointing to what gets added in next phase
+
+### Educational Theory Applied:
+- **Scaffolding (Vygotsky):** Layer knowledge incrementally
+- **Minimalist Learning (Carroll):** Essential info → immediate competence
+- **Spiral Learning (Bruner):** Revisit with increasing depth
+- **Cognitive Load Theory:** Don't overload working memory
+
+### Remember:
+> "You can't debug what you don't understand. Master the basics first."
+> 
+> Professional systems are built: Prototype → Harden → Production
+> Learning should mirror this progression.
+
+### When Explaining This Approach:
+Always provide reasoning for why phases are structured this way. Help learner understand *why* this method works, not just *what* to do.

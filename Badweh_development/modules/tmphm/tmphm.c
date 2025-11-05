@@ -137,23 +137,12 @@ int32_t tmphm_run(enum tmphm_instance_id instance_id){
             break;
 
         case STATE_RESERVE_I2C:
-            // Do reserve work
-        	// Write
-        	rc = i2c_reserve(st.cfg.i2c_instance_id);
-        	if (rc == 0){
-        		st.msg_bfr[0] = 0x2c;
-        		st.msg_bfr[1] = 0x06;
-        		rc = i2c_write(st.cfg.i2c_instance_id,st.cfg.i2c_addr, st.msg_bfr,2 );
-        		if (rc ==  0){
-        			st.state = STATE_WRITE_MEAS_CMD;
-        		} else {
-					i2c_release(st.cfg.i2c_instance_id);
-					st.state = STATE_IDLE;
-        		}
-        	}else {
-        		log_error("TMPHM: Reserve failed rc=%ld\n", rc);
-        	}
-
+            // Do reserve work (Happy Path - assume success)
+        	i2c_reserve(st.cfg.i2c_instance_id);
+        	st.msg_bfr[0] = 0x2c;
+        	st.msg_bfr[1] = 0x06;
+        	i2c_write(st.cfg.i2c_instance_id, st.cfg.i2c_addr, st.msg_bfr, 2);
+        	st.state = STATE_WRITE_MEAS_CMD;
             break;
 
         case STATE_WRITE_MEAS_CMD:
@@ -173,15 +162,10 @@ int32_t tmphm_run(enum tmphm_instance_id instance_id){
             break;
 
         case STATE_WAIT_MEAS:
-            // Do wait work
-        	if ( tmr_get_ms() - st.i2c_op_start_ms >= st.cfg.meas_time_ms){
-        		rc = i2c_read(st.cfg.i2c_instance_id, st.cfg.i2c_addr,st.msg_bfr, 6);
-        		if (rc == 0){
-        			st.state = STATE_READ_MEAS_VALUE;
-        		}else {
-            		i2c_release(st.cfg.i2c_instance_id);
-            		st.state = STATE_IDLE;
-        		}
+            // Do wait work (Happy Path - assume success)
+        	if (tmr_get_ms() - st.i2c_op_start_ms >= st.cfg.meas_time_ms){
+        		i2c_read(st.cfg.i2c_instance_id, st.cfg.i2c_addr, st.msg_bfr, 6);
+        		st.state = STATE_READ_MEAS_VALUE;
         	}
             break;
 

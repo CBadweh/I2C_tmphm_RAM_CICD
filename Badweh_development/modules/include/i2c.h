@@ -31,7 +31,24 @@
 
 #include <stdint.h>
 
-#include "config.h"
+////////////////////////////////////////////////////////////////////////////////
+// I2C Module Configuration (extracted for portability)
+////////////////////////////////////////////////////////////////////////////////
+
+// I2C timing configuration
+#define CONFIG_I2C_DFLT_TRANS_GUARD_TIME_MS 100
+
+// Module error codes (subset used by I2C)
+#define MOD_ERR_ARG          -1
+#define MOD_ERR_RESOURCE     -2
+#define MOD_ERR_STATE        -3
+#define MOD_ERR_BAD_CMD      -4
+#define MOD_ERR_BAD_INSTANCE -6
+#define MOD_ERR_PERIPH       -7
+#define MOD_ERR_NOT_RESERVED -8
+#define MOD_ERR_OP_IN_PROG   -9
+
+////////////////////////////////////////////////////////////////////////////////
 
 enum i2c_errors {
     I2C_ERR_NONE,  // Must have value 0.
@@ -46,22 +63,11 @@ enum i2c_errors {
 };
 
 // I2C numbering is based on the MCU hardware definition.
+// Hardcoded for I2C3 only (connected to SHT31-D sensor)
 
 enum i2c_instance_id {
-
-#if CONFIG_I2C_HAVE_INSTANCE_1 == 1
-    I2C_INSTANCE_1,
-#endif
-
-#if CONFIG_I2C_HAVE_INSTANCE_2 == 1
-    I2C_INSTANCE_2,
-#endif
-
-#if CONFIG_I2C_HAVE_INSTANCE_3 == 1
-    I2C_INSTANCE_3,
-#endif
-
-    I2C_NUM_INSTANCES
+    I2C_INSTANCE_3,      // I2C3 hardware peripheral
+    I2C_NUM_INSTANCES    // Total number of instances (1)
 };
 
 struct i2c_cfg {
@@ -73,18 +79,16 @@ int32_t i2c_get_def_cfg(enum i2c_instance_id instance_id, struct i2c_cfg* cfg);
 int32_t i2c_init(enum i2c_instance_id instance_id, struct i2c_cfg* cfg);
 int32_t i2c_start(enum i2c_instance_id instance_id);
 
-// Other APIs.
-int32_t i2c_reserve(enum i2c_instance_id instance_id);
-int32_t i2c_release(enum i2c_instance_id instance_id);
+// Other APIs (Happy Path - void return for reserve/release/write/read).
+void i2c_reserve(enum i2c_instance_id instance_id);
+void i2c_release(enum i2c_instance_id instance_id);
 
-int32_t i2c_write(enum i2c_instance_id instance_id, uint32_t dest_addr,
-                  uint8_t* msg_bfr, uint32_t msg_len);
-int32_t i2c_read(enum i2c_instance_id instance_id, uint32_t dest_addr,
-                 uint8_t* msg_bfr, uint32_t msg_len);
+void i2c_write(enum i2c_instance_id instance_id, uint32_t dest_addr,
+               uint8_t* msg_bfr, uint32_t msg_len);
+void i2c_read(enum i2c_instance_id instance_id, uint32_t dest_addr,
+              uint8_t* msg_bfr, uint32_t msg_len);
 
 int32_t i2c_get_op_status(enum i2c_instance_id instance_id);
-enum i2c_errors i2c_get_error(enum i2c_instance_id instance_id);
-int32_t i2c_bus_busy(enum i2c_instance_id instance_id);
 
 // Automated test (button-triggered)
 int32_t i2c_run_auto_test(void);
