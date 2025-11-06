@@ -80,15 +80,17 @@ int32_t i2c_init(enum i2c_instance_id instance_id, struct i2c_cfg* cfg);
 int32_t i2c_start(enum i2c_instance_id instance_id);
 
 // Other APIs (Happy Path - void return for reserve/release/write/read).
-void i2c_reserve(enum i2c_instance_id instance_id);
-void i2c_release(enum i2c_instance_id instance_id);
+int32_t i2c_reserve(enum i2c_instance_id instance_id);
+int32_t i2c_release(enum i2c_instance_id instance_id);
 
-void i2c_write(enum i2c_instance_id instance_id, uint32_t dest_addr,
+int32_t i2c_write(enum i2c_instance_id instance_id, uint32_t dest_addr,
                uint8_t* msg_bfr, uint32_t msg_len);
-void i2c_read(enum i2c_instance_id instance_id, uint32_t dest_addr,
+int32_t i2c_read(enum i2c_instance_id instance_id, uint32_t dest_addr,
               uint8_t* msg_bfr, uint32_t msg_len);
 
 int32_t i2c_get_op_status(enum i2c_instance_id instance_id);
+
+enum i2c_errors i2c_get_error(enum i2c_instance_id instance_id);
 
 // Automated test (button-triggered)
 int32_t i2c_run_auto_test(void);

@@ -69,9 +69,6 @@ struct i2c_state {
     
     bool reserved;                  // Is bus reserved?
     enum states state;              // Current state
-
-    enum i2c_errors last_op_error;  // ← ADD THIS LINE
-
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -146,45 +143,18 @@ int32_t i2c_run(enum i2c_instance_id instance_id)
 /*
  * RESERVE BUS - Get exclusive access
  */
-/*
- * RESERVE BUS - Get exclusive access
- */
- int32_t i2c_reserve(enum i2c_instance_id instance_id)
- {
-     // Validate instance ID
-     if (instance_id >= I2C_NUM_INSTANCES)
-         return MOD_ERR_BAD_INSTANCE;
-     
-     struct i2c_state* st = &i2c_states[instance_id];
-     
-     // Check if already reserved
-     if (st->reserved)
-         return MOD_ERR_RESOURCE;
-     
-     st->reserved = true;
-     return 0;  // Success
- }
+void i2c_reserve(enum i2c_instance_id instance_id)
+{
+    i2c_states[instance_id].reserved = true;
+}
+
 /*
  * RELEASE BUS - Free for others to use
  */
-/*
- * RELEASE BUS - Free for others to use
- */
- int32_t i2c_release(enum i2c_instance_id instance_id)
- {
-     // Validate instance ID
-     if (instance_id >= I2C_NUM_INSTANCES)
-         return MOD_ERR_BAD_INSTANCE;
-     
-     struct i2c_state* st = &i2c_states[instance_id];
-     
-     // Only release if it was reserved
-     if (!st->reserved)
-         return MOD_ERR_STATE;
-     
-     st->reserved = false;
-     return 0;  // Success
- }
+void i2c_release(enum i2c_instance_id instance_id)
+{
+    i2c_states[instance_id].reserved = false;
+}
 
 /*
  * WRITE - Start write operation (NO HELPER FUNCTIONS - all inline)
@@ -198,127 +168,80 @@ int32_t i2c_run(enum i2c_instance_id instance_id)
  * 
  * Then the interrupt handler takes over (see i2c_interrupt below)
  */
+void i2c_write(enum i2c_instance_id instance_id, uint32_t dest_addr, 
+               uint8_t* msg_bfr, uint32_t msg_len)
+{
+    struct i2c_state* st = &i2c_states[instance_id];
+    
+    // Save operation parameters
+    st->dest_addr = dest_addr;
+    st->msg_bfr = msg_bfr;
+    st->msg_len = msg_len;
+    st->msg_bytes_xferred = 0;
 
-int32_t i2c_write(enum i2c_instance_id instance_id, uint32_t dest_addr, 
-    uint8_t* msg_bfr, uint32_t msg_len){
-// Validate instance ID
-if (instance_id >= I2C_NUM_INSTANCES)
-return MOD_ERR_BAD_INSTANCE;
+    // Set initial state
+    st->state = STATE_MSTR_WR_GEN_START;
 
-struct i2c_state* st = &i2c_states[instance_id];
+    // Enable I2C peripheral
+    LL_I2C_Enable(st->i2c_reg_base);
+    
+    // Generate START condition
+    LL_I2C_GenerateStartCondition(st->i2c_reg_base);
 
-// Must be reserved
-if (!st->reserved)
-return MOD_ERR_NOT_RESERVED;
-
-// Must be idle
-if (st->state != STATE_IDLE)
-return MOD_ERR_STATE;
-
-// Save operation parameters
-st->dest_addr = dest_addr;
-st->msg_bfr = msg_bfr;
-st->msg_len = msg_len;
-st->msg_bytes_xferred = 0;
-st->last_op_error = I2C_ERR_NONE;  // ← Initialize error to NONE
-
-// Set initial state
-st->state = STATE_MSTR_WR_GEN_START;
-
-// Enable I2C peripheral
-LL_I2C_Enable(st->i2c_reg_base);
-
-// Generate START condition
-LL_I2C_GenerateStartCondition(st->i2c_reg_base);
-
-// Enable interrupts (rest happens in interrupt handler!)
-ENABLE_ALL_INTERRUPTS(st);
-
-return 0;  // Success - operation started
+    // Enable interrupts (rest happens in interrupt handler!)
+    ENABLE_ALL_INTERRUPTS(st);
 }
 
 /*
- * READ - Start read operation
+ * READ - Start read operation (NO HELPER FUNCTIONS - all inline)
+ * 
+ * You can read the ENTIRE read setup in one place:
+ * 1. Save parameters (address, buffer, length)
+ * 2. Set state to RD_GEN_START
+ * 3. Enable peripheral
+ * 4. Generate START
+ * 5. Enable interrupts
+ * 
+ * Then the interrupt handler takes over (see i2c_interrupt below)
  */
-int32_t i2c_read(enum i2c_instance_id instance_id, uint32_t dest_addr,uint8_t* msg_bfr, uint32_t msg_len){
-// Validate instance ID
-if (instance_id >= I2C_NUM_INSTANCES)
-return MOD_ERR_BAD_INSTANCE;
+void i2c_read(enum i2c_instance_id instance_id, uint32_t dest_addr,
+              uint8_t* msg_bfr, uint32_t msg_len)
+{
+    struct i2c_state* st = &i2c_states[instance_id];
+    
+    // Save operation parameters
+    st->dest_addr = dest_addr;
+    st->msg_bfr = msg_bfr;
+    st->msg_len = msg_len;
+    st->msg_bytes_xferred = 0;
 
-struct i2c_state* st = &i2c_states[instance_id];
+    // Set initial state
+    st->state = STATE_MSTR_RD_GEN_START;
 
-// Must be reserved
-if (!st->reserved)
-return MOD_ERR_NOT_RESERVED;
+    // Enable I2C peripheral
+    LL_I2C_Enable(st->i2c_reg_base);
+    
+    // Generate START condition
+    LL_I2C_GenerateStartCondition(st->i2c_reg_base);
 
-// Must be idle
-if (st->state != STATE_IDLE)
-return MOD_ERR_STATE;
-
-// Save operation parameters
-st->dest_addr = dest_addr;
-st->msg_bfr = msg_bfr;
-st->msg_len = msg_len;
-st->msg_bytes_xferred = 0;
-st->last_op_error = I2C_ERR_NONE;  // ← Initialize error to NONE
-
-// Set initial state
-st->state = STATE_MSTR_RD_GEN_START;
-
-// Enable I2C peripheral
-LL_I2C_Enable(st->i2c_reg_base);
-
-// Generate START condition
-LL_I2C_GenerateStartCondition(st->i2c_reg_base);
-
-// Enable interrupts (rest happens in interrupt handler!)
-ENABLE_ALL_INTERRUPTS(st);
-
-return 0;  // Success - operation started
+    // Enable interrupts (rest happens in interrupt handler!)
+    ENABLE_ALL_INTERRUPTS(st);
 }
 
 /*
  * GET STATUS - Poll this to check if operation complete
- * Returns: 0 = success, MOD_ERR_OP_IN_PROG = still working, MOD_ERR_BAD_INSTANCE = failed, -1 = failed
- *          use i2c_get_error() for details
- *          use i2c_release() to release the bus
- *          use i2c_run_auto_test() to run the automated test
- *          use i2c_get_error() to get the error code
- *          use i2c_release() to release the bus
- *          use i2c_run_auto_test() to run the automated test
- *          use i2c_get_error() to get the error code
- *          use i2c_release() to release the bus
+ * Returns: 0 = complete, MOD_ERR_OP_IN_PROG = still working
  */
 int32_t i2c_get_op_status(enum i2c_instance_id instance_id)
 {
-    // Validate instance ID
-    if (instance_id >= I2C_NUM_INSTANCES)
-        return MOD_ERR_BAD_INSTANCE;
-    
     struct i2c_state* st = &i2c_states[instance_id];
     
-    if (st->state != STATE_IDLE)
-        return MOD_ERR_OP_IN_PROG;  // Still working
-    
-    // Operation complete - check if it succeeded or failed
-    if (st->last_op_error == I2C_ERR_NONE)
-        return 0;  // Success!
+    if (st->state == STATE_IDLE)
+        return 0;  // Complete!
     else
-        return -1;  // Failed (use i2c_get_error() for details)
+        return MOD_ERR_OP_IN_PROG;  // Still working
 }
 
-
-/*
- * GET ERROR - Get detailed error code after operation fails
- * Call this when i2c_get_op_status() returns error
- */
-enum i2c_errors i2c_get_error(enum i2c_instance_id instance_id)
-{
-    if (instance_id >= I2C_NUM_INSTANCES)
-        return I2C_ERR_INVALID_INSTANCE;
-    
-    return i2c_states[instance_id].last_op_error;
-}
 ////////////////////////////////////////////////////////////////////////////////
 // INTERRUPT HANDLERS
 ////////////////////////////////////////////////////////////////////////////////
@@ -379,7 +302,6 @@ static void i2c_interrupt(enum i2c_instance_id instance_id,
                     LL_I2C_GenerateStopCondition(st->i2c_reg_base);
                     LL_I2C_Disable(st->i2c_reg_base);
                     st->state = STATE_IDLE;
-                    st->last_op_error = I2C_ERR_NONE;  // ← ADD THIS LINE
                 }
             }
             break;
@@ -430,7 +352,6 @@ static void i2c_interrupt(enum i2c_instance_id instance_id,
                     }
                     LL_I2C_Disable(st->i2c_reg_base);
                     st->state = STATE_IDLE;
-                    st->last_op_error = I2C_ERR_NONE;  // ← ADD THIS LINE
                     
                 } else if (st->msg_bytes_xferred == st->msg_len - 1) {
                     // Next byte is the last one → NACK it and send STOP
@@ -458,24 +379,14 @@ int32_t i2c_run_auto_test(void)
 
     switch (test_state) {
         case 0:  // Reserve the I2C bus
-            rc = i2c_reserve(instance_id);
-            if (rc != 0){
-                printc("I2C_RESERVE_FAIL\n");
-                return rc;
-            }
+            i2c_reserve(instance_id);
             test_state = 1;
             return 0;  // Continue
 
         case 1:  // Write command to sensor
             msg_bfr[0] = 0x2c;  // High repeatability measurement
             msg_bfr[1] = 0x06;
-            rc = i2c_write(instance_id, 0x44, msg_bfr, 2);
-            if (rc != 0){
-                printc("I2C_WRITE_FAIL\n");
-                i2c_release(instance_id);
-                test_state = 0;
-                return rc;  // Test failed
-            }
+            i2c_write(instance_id, 0x44, msg_bfr, 2);
             test_state = 2;
             return 0;  // Continue
 
@@ -483,25 +394,12 @@ int32_t i2c_run_auto_test(void)
             rc = i2c_get_op_status(instance_id);
             if (rc == MOD_ERR_OP_IN_PROG)
                 return 0;  // Still busy
-            if (rc != 0){
-                enum i2c_errors err = i2c_get_error(instance_id);
-                printc("I2C_WRITE_FAIL: %d\n", err);
-                i2c_release(instance_id);
-                test_state = 0;
-                return rc;  // Test failed
-            }
             test_state = 3;
             return 0;  // Continue
 
         case 3:  // Read temperature/humidity data
             msg_len = 6;  // temp(2) + CRC + hum(2) + CRC
-            rc = i2c_read(instance_id, 0x44, msg_bfr, msg_len);
-            if (rc != 0){
-                printc("Read start failed: %d\n", rc);
-                i2c_release(instance_id);
-                test_state = 0;
-                return rc;
-            }
+            i2c_read(instance_id, 0x44, msg_bfr, msg_len);
             test_state = 4;
             return 0;  // Continue
 
@@ -509,22 +407,11 @@ int32_t i2c_run_auto_test(void)
             rc = i2c_get_op_status(instance_id);
             if (rc == MOD_ERR_OP_IN_PROG)
                 return 0;  // Still busy
-            if (rc != 0){
-                enum i2c_errors err = i2c_get_error(instance_id);
-                printc("I2C_READ_FAIL: %d\n", err);
-                i2c_release(instance_id);
-                test_state = 0;
-                return rc;
-            }
             test_state = 5;
             return 0;  // Continue
 
         case 5:  // Release the bus
-            rc = i2c_release(instance_id);
-            if (rc != 0) {
-                printc("I2C_RELEASE_FAIL: %d\n", rc);
-                return rc;
-            }
+            i2c_release(instance_id);
             test_state = 0;  // Reset for next test
             return 1;  // Test complete
 

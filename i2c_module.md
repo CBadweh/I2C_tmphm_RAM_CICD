@@ -2423,6 +2423,384 @@ ci-cd-tools/build.bat
 
 ---
 
+### 🎯 Understanding Error Handling Patterns - The "Defense Layers"
+
+Now that you've implemented Day 1, let's understand the **two core error patterns** and when/why each is used:
+
+#### **Pattern 1: API Functions - PREVENT Bad Operations**
+
+**Used in:** `i2c_reserve()`, `i2c_write()`, `i2c_read()`, `i2c_get_op_status()`
+
+**Checks BEFORE doing work:**
+
+```c
+int32_t i2c_write(enum i2c_instance_id instance_id, uint32_t dest_addr,
+                  uint8_t* msg_bfr, uint32_t msg_len) 
+{
+    // Layer 1: Validate INPUTS (catch programmer bugs)
+    if (instance_id >= I2C_NUM_INSTANCES)
+        return MOD_ERR_BAD_INSTANCE;
+    
+    struct i2c_state* st = &i2c_states[instance_id];
+    
+    // Layer 2: Validate STATE (catch logic bugs)
+    if (!st->reserved)
+        return MOD_ERR_NOT_RESERVED;  // "You forgot to reserve!"
+    
+    if (st->state != STATE_IDLE)
+        return MOD_ERR_STATE;  // "Still busy from last operation!"
+    
+    // NOW safe to start operation
+    st->dest_addr = dest_addr;
+    st->msg_bfr = msg_bfr;
+    st->msg_len = msg_len;
+    st->msg_bytes_xferred = 0;
+    st->last_op_error = I2C_ERR_NONE;
+    st->state = STATE_MSTR_WR_GEN_START;
+    
+    LL_I2C_Enable(st->i2c_reg_base);
+    LL_I2C_GenerateStartCondition(st->i2c_reg_base);
+    ENABLE_ALL_INTERRUPTS(st);
+    
+    return 0;  // Success - operation started
+}
+```
+
+**Why these checks?**
+1. **Prevent corruption** - Don't start operation in wrong state
+2. **Fail fast** - Catch bugs immediately, not later
+3. **Clear errors** - Know exactly what went wrong
+
+---
+
+#### **Pattern 2: Application Code - CLEANUP After Failure**
+
+**Used in:** `i2c_run_auto_test()`, application code, client modules
+
+**Checks AFTER operation completes:**
+
+```c
+// Example from i2c_run_auto_test()
+case 1:  // Write command to sensor
+    msg_bfr[0] = 0x2c;
+    msg_bfr[1] = 0x06;
+    rc = i2c_write(instance_id, 0x44, msg_bfr, 2);
+    if (rc != 0) {
+        // CLEANUP: Return system to known state
+        printc("Write start failed: %d\n", rc);
+        i2c_release(instance_id);  // Free resource
+        test_state = 0;             // Reset state machine
+        return 1;                   // Propagate error to caller
+    }
+    test_state = 2;  // Continue to next state
+    return 0;
+```
+
+**Why this pattern?**
+1. **Resource cleanup** - Release bus so others can use it
+2. **State reset** - Application can retry or recover
+3. **Error propagation** - Tell caller "it failed"
+
+---
+
+#### **When to Use Which Pattern - Decision Matrix**
+
+| Check Type | Where | Why | Example Error Code |
+|------------|-------|-----|-------------------|
+| **Validate ID** | All API functions | Catch array out-of-bounds (crashes!) | `MOD_ERR_BAD_INSTANCE` |
+| **Validate State** | Operations (write/read) | Prevent conflicting operations | `MOD_ERR_STATE` |
+| **Validate Reserved** | Operations (write/read) | Enforce mutual exclusion | `MOD_ERR_NOT_RESERVED` |
+| **Check Completion** | Application/test code | Know when operation done | `MOD_ERR_OP_IN_PROG` |
+| **Cleanup on Error** | Application/test code | Return to known state | Release, reset, propagate |
+
+---
+
+#### **The Mental Model: "Layers of Defense"**
+
+```
+┌─────────────────────────────────────────────┐
+│  Application Layer (i2c_run_auto_test)     │
+│  - Checks completion status                 │
+│  - Cleans up on failure                     │
+│  - Handles errors from API                  │
+│  - Decides recovery strategy                │
+└─────────────────────────────────────────────┘
+                    ↓ calls ↓
+┌─────────────────────────────────────────────┐
+│  API Layer (i2c_write, i2c_read)           │
+│  - Validates inputs (ID, pointers)          │
+│  - Validates state (reserved, idle)         │
+│  - Prevents bad operations                  │
+│  - Returns error codes                      │
+│  - Does NOT clean up application state      │
+└─────────────────────────────────────────────┘
+                    ↓ uses ↓
+┌─────────────────────────────────────────────┐
+│  Hardware Layer (interrupts)                │
+│  - Detects hardware errors (Day 2)          │
+│  - Sets last_op_error                       │
+│  - Returns to IDLE state                    │
+└─────────────────────────────────────────────┘
+```
+
+---
+
+#### **Specific Rules: When to Check What**
+
+**Rule 1: Check ID at EVERY API entry point**
+```c
+if (instance_id >= I2C_NUM_INSTANCES)
+    return MOD_ERR_BAD_INSTANCE;
+```
+**Why?** Prevents array access violations (crashes!). Always check before using `i2c_states[instance_id]`.
+
+**Rule 2: Check state BEFORE starting operation**
+```c
+if (st->state != STATE_IDLE)
+    return MOD_ERR_STATE;
+```
+**Why?** Can't start new write if previous write still running! Prevents state machine corruption.
+
+**Rule 3: Check reserved BEFORE operation**
+```c
+if (!st->reserved)
+    return MOD_ERR_NOT_RESERVED;
+```
+**Why?** Enforces "you must reserve before use" contract. Prevents conflicting access.
+
+**Rule 4: Poll completion in APPLICATION code**
+```c
+do {
+    status = i2c_get_op_status(instance_id);
+} while (status == MOD_ERR_OP_IN_PROG);
+
+if (status != 0) {
+    // Handle error
+}
+```
+**Why?** Application decides how to wait (polling, timeout, give up, etc.). Separation of concerns.
+
+**Rule 5: Cleanup in APPLICATION code**
+```c
+if (rc != 0) {
+    i2c_release(instance_id);  // Free resource
+    test_state = 0;             // Reset application state
+    return 1;                   // Propagate error up
+}
+```
+**Why?** API doesn't know what "cleanup" means for your use case. Application owns its state.
+
+---
+
+#### **Complete Example: Full Error Flow**
+
+**Scenario:** User presses button → test runs → sensor unplugged
+
+```c
+// Application State 1: Try to reserve bus
+rc = i2c_reserve(instance_id);
+    ↓ Inside i2c_reserve():
+    ├─ Check: instance_id < I2C_NUM_INSTANCES? ✓
+    ├─ Check: st->reserved == false? ✓
+    ├─ Action: Set st->reserved = true
+    └─ Return: 0 (SUCCESS)
+
+// Application State 2: Try to write to sensor (sensor unplugged!)
+rc = i2c_write(instance_id, 0x44, data, 2);
+    ↓ Inside i2c_write():
+    ├─ Check: instance_id valid? ✓
+    ├─ Check: st->reserved? ✓
+    ├─ Check: st->state == STATE_IDLE? ✓
+    ├─ Action: Start operation (enable peripheral, generate START)
+    └─ Return: 0 (operation STARTED successfully)
+
+// Application State 3: Poll for completion
+rc = i2c_get_op_status(instance_id);
+    ↓ Inside i2c_get_op_status():
+    ├─ Check: st->state == STATE_IDLE? NO (still in WR_SENDING_ADDR)
+    └─ Return: MOD_ERR_OP_IN_PROG
+    
+// Loop back to State 3... (still waiting)
+rc = i2c_get_op_status(instance_id);
+    ↓ Inside i2c_get_op_status():
+    ├─ Check: st->state == STATE_IDLE? YES! 
+    │   (Hardware detected no ACK, Day 2 error interrupt set state to IDLE)
+    ├─ Check: st->last_op_error? I2C_ERR_ACK_FAIL
+    └─ Return: -1 (FAILED)
+
+// Application handles error
+if (rc != 0) {
+    err = i2c_get_error(instance_id);  // Returns: I2C_ERR_ACK_FAIL
+    printc("Write failed: ACK_FAIL (sensor unplugged?)\n");
+    i2c_release(instance_id);  // Cleanup: free bus
+    test_state = 0;             // Cleanup: reset test
+    return 1;                   // Propagate: tell caller we failed
+}
+```
+
+---
+
+#### **Key Insight: Separation of Responsibilities**
+
+**API functions (reserve/write/read) answer:**
+- "Can I START this operation safely?"
+- Returns immediately with validation result
+
+**Application code (test/client) handles:**
+- "Did the operation FINISH successfully?"
+- Manages waiting, cleanup, and recovery
+
+**This separation allows:**
+- ✅ API stays simple (validate and start)
+- ✅ Application controls timing (how long to wait)
+- ✅ Clear responsibility boundary
+
+---
+
+#### **Restaurant Analogy**
+
+Think of the I2C driver like a restaurant:
+
+| Role | I2C Equivalent | Responsibility |
+|------|----------------|----------------|
+| **Waiter** | API functions | "Can I take your order?" (validates), "Your order is ready!" (status) |
+| **Customer** | Application code | "Is my food ready yet?" (polls), "I'm leaving" (cleanup) |
+| **Chef** | Interrupt handler | "Food is ready!" or "We're out of ingredients!" (events/errors) |
+
+**The waiter validates (can you order this?). The customer waits and cleans up (is it done? leave table). The chef executes and reports (success or failure).**
+
+---
+
+#### **Day 1 Summary: What You Built**
+
+**Before (Happy Path):**
+```c
+i2c_reserve(id);                    // No validation, no error
+i2c_write(id, addr, buf, len);      // Assume success
+while (polling) { /* infinite? */ }  // Could hang forever
+```
+
+**After (Day 1 - Error Detection):**
+```c
+rc = i2c_reserve(id);
+if (rc != 0) {
+    handle_error(rc);  // Visible failure
+}
+
+rc = i2c_write(id, addr, buf, len);
+if (rc != 0) {
+    cleanup();         // Controlled recovery
+}
+
+while ((rc = i2c_get_op_status(id)) == MOD_ERR_OP_IN_PROG) {
+    // Bounded loop, can check timeout, etc.
+}
+
+if (rc != 0) {
+    err = i2c_get_error(id);  // Detailed diagnosis
+}
+```
+
+**Result:** Failures are now **visible**, **bounded**, and **diagnosable**.
+
+**✅ BEST PRACTICE:** Always check return codes. Silent failures are the hardest to debug.
+
+**Next:** Day 2 will catch failures your validation CAN'T (hardware errors during the operation).
+
+---
+
+### Testing Day 1 Error Paths - Fault Injection
+
+**Question:** After implementing Day 1 error detection, should you test each failure mode?
+
+**Answer:** **Yes, absolutely.**
+
+#### Natural Testing (Easy to Implement)
+
+1. **ACK Failure** - Use wrong address (0x99 instead of 0x44)
+2. **Invalid State** - Call `i2c_write()` twice without polling between
+3. **Not Reserved** - Call `i2c_write()` without `i2c_reserve()`
+
+#### Requires Deliberate Setup (Harder)
+
+4. **Timeout** - Unplug sensor during transaction, or disable interrupts temporarily
+5. **Bus Busy** - Hard to test without special hardware
+
+#### Why Test Error Paths?
+
+**✅ BEST PRACTICE Reasons:**
+
+1. **Error handling has bugs too** - Seen systems that detect errors but then crash in the error handler
+2. **Coverage matters** - Untested code is broken code
+3. **Field reliability** - These failures WILL happen in production
+4. **Confidence** - Know your recovery actually works
+
+#### Practical Approach for Day 1
+
+**During development:**
+- ✅ Test what you can naturally (wrong address, state violations)
+- ✅ Add debug flag to force timeout in code (remove later)
+- ❌ Don't obsess over bus-busy (rare, hard to inject)
+
+**For production:**
+- Add compile-time test hooks: `#ifdef ENABLE_FAULT_INJECTION`
+- Allows forcing specific error codes for automated testing
+- Remove or disable in release builds
+
+**💡 PRO TIP:** Test error paths on Day 1 while implementing them. Waiting until "later" means they never get tested.
+
+---
+
+### Industry Terminology for Error Path Testing
+
+**Common Terms You'll Encounter:**
+
+**1. Fault Injection Testing**
+- Deliberately inject faults to verify error handling
+- What you're doing when forcing timeout/ACK failures
+
+**2. Negative Testing**
+- Test what happens with invalid/error inputs
+- Opposite of "positive testing" (happy path)
+
+**3. Error Path Coverage**
+- Code coverage metric for error-handling branches
+- "Did we execute the error recovery code?"
+
+**4. Defensive Programming Verification**
+- Proving your defenses actually work
+- Testing guards, timeouts, validation
+
+**5. Fault Tolerance Testing**
+- System continues working despite faults
+- More comprehensive than just error detection
+
+**Embedded-Specific:**
+
+**6. Hardware-in-the-Loop (HIL) Testing**
+- Real hardware, injected faults (unplug sensor)
+- What you do when physically disconnecting I2C
+
+**7. Chaos Engineering** (newer term)
+- Deliberately break things to verify resilience
+- Netflix popularized this, but concept is old
+
+**Safety-Critical Standards:**
+
+**8. FMEA (Failure Mode Effects Analysis)**
+- Document: "If X fails, system does Y"
+- Your Day 1 failure mode list IS a mini-FMEA
+
+**9. Fault Coverage**
+- % of possible faults that are detected/handled
+- Medical/automotive require high percentages
+
+**Most Common:** "Fault injection" and "negative testing" are most widely used in embedded systems.
+
+**📖 WAR STORY:** Military/aerospace calls it "fault insertion testing" and requires 100% error path coverage. Seen systems rejected because timeout handler was never proven to work.
+
+---
+
 ## **Day 2: Error Interrupt Handler and Recovery**
 
 ### Morning Session (2-3 hours): Handling Hardware Errors
