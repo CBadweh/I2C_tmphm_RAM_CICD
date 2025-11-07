@@ -143,7 +143,7 @@ int32_t i2c_run(enum i2c_instance_id instance_id)
 /*
  * RESERVE BUS - Get exclusive access
  */
-void i2c_reserve(enum i2c_instance_id instance_id)
+int32_t i2c_reserve(enum i2c_instance_id instance_id)
 {
     i2c_states[instance_id].reserved = true;
 }
@@ -151,7 +151,7 @@ void i2c_reserve(enum i2c_instance_id instance_id)
 /*
  * RELEASE BUS - Free for others to use
  */
-void i2c_release(enum i2c_instance_id instance_id)
+int32_t i2c_release(enum i2c_instance_id instance_id)
 {
     i2c_states[instance_id].reserved = false;
 }
@@ -168,7 +168,7 @@ void i2c_release(enum i2c_instance_id instance_id)
  * 
  * Then the interrupt handler takes over (see i2c_interrupt below)
  */
-void i2c_write(enum i2c_instance_id instance_id, uint32_t dest_addr, 
+int32_t i2c_write(enum i2c_instance_id instance_id, uint32_t dest_addr,
                uint8_t* msg_bfr, uint32_t msg_len)
 {
     struct i2c_state* st = &i2c_states[instance_id];
@@ -204,7 +204,7 @@ void i2c_write(enum i2c_instance_id instance_id, uint32_t dest_addr,
  * 
  * Then the interrupt handler takes over (see i2c_interrupt below)
  */
-void i2c_read(enum i2c_instance_id instance_id, uint32_t dest_addr,
+int32_t i2c_read(enum i2c_instance_id instance_id, uint32_t dest_addr,
               uint8_t* msg_bfr, uint32_t msg_len)
 {
     struct i2c_state* st = &i2c_states[instance_id];
