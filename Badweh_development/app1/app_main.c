@@ -1,10 +1,8 @@
 /*
- * @brief Main application file
+ * @brief Main application entry point and super loop
  *
- * This file is the main application file that initializes and starts the various
- * modules and then runs the super loop.
- *
- * Based on template by Eugene R Schroeder
+ * Initializes all modules (UART, console, I2C, TMPHM, timer), starts them,
+ * and runs the super loop that continuously processes module state machines.
  */
 
 #include <stddef.h>
@@ -58,6 +56,16 @@ static struct cmd_client_info cmd_info = {
 // Public (global) functions
 ////////////////////////////////////////////////////////////////////////////////
 
+/*
+ * @brief Main application entry point
+ *
+ * Performs three-phase initialization:
+ * 1. INIT: Configure and initialize all modules
+ * 2. START: Enable modules for operation (interrupts, timers)
+ * 3. SUPER LOOP: Continuously run module state machines
+ *
+ * @note This function never returns - runs forever in super loop
+ */
 void app_main(void)
 {
     struct console_cfg console_cfg;
