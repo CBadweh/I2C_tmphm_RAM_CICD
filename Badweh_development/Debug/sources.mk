@@ -28,10 +28,8 @@ Drivers/STM32F4xx_HAL_Driver/Src \
 app1 \
 modules/cmd \
 modules/console \
-modules/dio \
 modules/i2c \
 modules/log \
-modules/lwl \
 modules/tmphm \
 modules/tmr \
 modules/ttys \
