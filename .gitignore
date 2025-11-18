@@ -54,6 +54,8 @@ Release/Drivers/**/*.cyclo
 .metadata/
 .metadata/.ide.log
 .metadata/.plugins/org.eclipse.e4.workbench/workbench.xmi
+.metadata/**/*.log
+.metadata/**/*.ide.log
 RemoteSystemsTempFiles/
 
 # IDE project files (some should be tracked, some not)
