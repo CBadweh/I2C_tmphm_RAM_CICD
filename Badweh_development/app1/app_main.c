@@ -4,27 +4,7 @@
  * This file is the main application file that initializes and starts the various
  * modules and then runs the super loop.
  *
- * MIT License
- * 
- * Copyright (c) 2021 Eugene R Schroeder
- * 
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- * 
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- * 
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Based on template by Eugene R Schroeder
  */
 
 #include <stddef.h>
@@ -40,12 +20,7 @@
 #include "ttys.h"        // Serial UART
 #include "module.h"      // Module framework
 
-// Removed (not needed for Day 1):
-// #include "dio.h"      - Button input, not needed for console-based testing
-// #include "lwl.h"      - Lightweight logging, added in Day 5
-// #include "blinky.h"   - Visual indicator, not critical
-// #include "gps_gtu7.h" - GPS module, unrelated to sensor
-// #include "mem.h"      - Memory management, not needed yet
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // Common macros
