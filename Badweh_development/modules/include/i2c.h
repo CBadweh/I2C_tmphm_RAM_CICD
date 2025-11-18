@@ -78,6 +78,7 @@ struct i2c_cfg {
 int32_t i2c_get_def_cfg(enum i2c_instance_id instance_id, struct i2c_cfg* cfg);
 int32_t i2c_init(enum i2c_instance_id instance_id, struct i2c_cfg* cfg);
 int32_t i2c_start(enum i2c_instance_id instance_id);
+int32_t i2c_run(enum i2c_instance_id instance_id);
 
 // Other APIs (Happy Path - void return for reserve/release/write/read).
 int32_t i2c_reserve(enum i2c_instance_id instance_id);

@@ -28,7 +28,7 @@
 #include "module.h"
 #include "tmr.h"
 #include "tmphm.h"
-//#include "wdg.h"      // Removed - wdg module not needed      // <-- ADD THIS LINE
+//#include "wdg.h"      // Removed - wdg module not needed (Option A)
 
 enum states {
     STATE_IDLE,
@@ -113,14 +113,14 @@ int32_t tmphm_start(enum tmphm_instance_id instance_id)
 	if(st.tmr_id < 0){
 		return MOD_ERR_RESOURCE;
 	}
-    // **ADD THESE LINES - Register TMPHM watchdog with 5-second timeout**
+    // **COMMENTED OUT - wdg module removed**
     // int32_t rc = wdg_register(CONFIG_TMPHM_WDG_ID, 5000);
     // if (rc < 0) {
-    // log_error("tmphm_start: wdg_register error %d\n", rc);
-    // return rc;
+    //     log_error("tmphm_start: wdg_register error %d\n", rc);
+    //     return rc;
     // }
     // log_info("tmphm_start: Registered watchdog %d with 5s timeout\n",
-    // CONFIG_TMPHM_WDG_ID);
+    //          CONFIG_TMPHM_WDG_ID);
 
     return 0;
 }
@@ -199,7 +199,7 @@ int32_t tmphm_run(enum tmphm_instance_id instance_id){
                         st.last_meas_ms = tmr_get_ms();  // Current time
                         st.got_meas = true;  // We have valid data now!
 
-                        // **ADD THIS LINE - Feed watchdog after successful measurement!**
+                        // **COMMENTED OUT - wdg module removed**
                         // wdg_feed(CONFIG_TMPHM_WDG_ID);
 
 //                        log_info("temp=%ld degC*10 hum=%lu %%*10\n", temp, hum);
@@ -311,9 +311,9 @@ int32_t tmphm_run(enum tmphm_instance_id instance_id){
 
                         log_info("TMPHM: temp=%ld degC*10 hum=%lu %%*10\n", temp, hum);  // **UNCOMMENT/ADD THIS**
 
-                        // Feed watchdog after successful measurement!
-                        wdg_feed(CONFIG_TMPHM_WDG_ID);
-                        log_info("TMPHM: Fed watchdog\n");  // **ADD THIS**
+                        // **COMMENTED OUT - wdg module removed**
+                        // wdg_feed(CONFIG_TMPHM_WDG_ID);
+                        // log_info("TMPHM: Fed watchdog\n");  // **ADD THIS**
                     }
                     // Always release I2C after read completes
                     i2c_release(st.cfg.i2c_instance_id);

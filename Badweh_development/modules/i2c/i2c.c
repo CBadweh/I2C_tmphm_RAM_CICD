@@ -23,6 +23,8 @@
 
 #include "tmr.h"
 #include "console.h"
+#include "cmd.h"
+#include "module.h"
 #include "i2c.h"
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -80,12 +82,35 @@ struct i2c_state {
 
 static void i2c_interrupt(enum i2c_instance_id instance_id,
                           enum interrupt_type inter_type);
+static int32_t cmd_i2c_test(int32_t argc, const char** argv);
 
 ////////////////////////////////////////////////////////////////////////////////
 // PRIVATE VARIABLES
 ////////////////////////////////////////////////////////////////////////////////
 
 static struct i2c_state i2c_states[I2C_NUM_INSTANCES];
+
+// Auto test state tracking
+static bool auto_test_active = false;
+
+// Command registration
+static struct cmd_cmd_info cmds[] = {
+    {
+        .name = "test",
+        .func = cmd_i2c_test,
+        .help = "Run test, usage: i2c test [auto|not_reserved] (enter no args for help)",
+    },
+};
+
+static struct cmd_client_info cmd_info = {
+    .name = "i2c",
+    .num_cmds = ARRAY_SIZE(cmds),
+    .cmds = cmds,
+    .log_level_ptr = NULL,  // No log level support
+    .num_u16_pms = 0,
+    .u16_pms = NULL,
+    .u16_pm_names = NULL,
+};
 
 ////////////////////////////////////////////////////////////////////////////////
 // PUBLIC API FUNCTIONS
@@ -120,6 +145,7 @@ int32_t i2c_init(enum i2c_instance_id instance_id, struct i2c_cfg* cfg)
 int32_t i2c_start(enum i2c_instance_id instance_id)
 {
     struct i2c_state* st = &i2c_states[instance_id];
+    int32_t result;
 
     // Get a timer (for structure, not used in happy path)
     st->guard_tmr_id = tmr_inst_get_cb(0, NULL, 0);
@@ -132,14 +158,33 @@ int32_t i2c_start(enum i2c_instance_id instance_id)
     NVIC_SetPriority(I2C3_EV_IRQn, NVIC_EncodePriority(NVIC_GetPriorityGrouping(),0, 0));
     NVIC_EnableIRQ(I2C3_EV_IRQn);
 
+    // Register commands
+    result = cmd_register(&cmd_info);
+    if (result < 0) {
+        return MOD_ERR_RESOURCE;
+    }
+
     return 0;
 }
 
 /*
- * Run function - Does nothing
+ * Run function - Polls auto test if active
  */
 int32_t i2c_run(enum i2c_instance_id instance_id)
 {
+    if (auto_test_active) {
+        int32_t rc = i2c_run_auto_test();
+        if (rc > 0) {
+            // Test completed
+            auto_test_active = false;
+            printc(">> I2C auto test completed\n\n");
+        } else if (rc < 0) {
+            // Test failed
+            auto_test_active = false;
+            printc(">> I2C auto test failed\n\n");
+        }
+        // If rc == 0, test is still in progress, continue polling
+    }
     return 0;
 }
 
@@ -598,4 +643,71 @@ int32_t i2c_test_not_reserved(void)
     printc("========================================\n\n");
 
     return 1;  // All tests passed
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// COMMAND HANDLERS
+////////////////////////////////////////////////////////////////////////////////
+
+/*
+ * Command handler for "i2c test" command
+ */
+static int32_t cmd_i2c_test(int32_t argc, const char** argv)
+{
+    // Handle help case (just "i2c test" with no arguments)
+    if (argc == 2) {
+        printc("Test operations:\n"
+               "  Run auto test: i2c test auto\n"
+               "  Test not reserved: i2c test not_reserved\n");
+        return 0;
+    }
+    
+    if (argc < 3) {
+        printc("Insufficient arguments\n");
+        return MOD_ERR_BAD_CMD;
+    }
+    
+    // Case-insensitive comparison (simple implementation)
+    const char* op = argv[2];
+    int match_auto = 0;
+    int match_not_reserved = 0;
+    
+    // Simple case-insensitive comparison
+    if ((op[0] == 'a' || op[0] == 'A') &&
+        (op[1] == 'u' || op[1] == 'U') &&
+        (op[2] == 't' || op[2] == 'T') &&
+        (op[3] == 'o' || op[3] == 'O') &&
+        op[4] == '\0') {
+        match_auto = 1;
+    } else if ((op[0] == 'n' || op[0] == 'N') &&
+               (op[1] == 'o' || op[1] == 'O') &&
+               (op[2] == 't' || op[2] == 'T') &&
+               op[3] == '_' &&
+               (op[4] == 'r' || op[4] == 'R') &&
+               (op[5] == 'e' || op[5] == 'E') &&
+               (op[6] == 's' || op[6] == 'S') &&
+               (op[7] == 'e' || op[7] == 'E') &&
+               (op[8] == 'r' || op[8] == 'R') &&
+               (op[9] == 'v' || op[9] == 'V') &&
+               (op[10] == 'e' || op[10] == 'E') &&
+               (op[11] == 'd' || op[11] == 'D') &&
+               op[12] == '\0') {
+        match_not_reserved = 1;
+    }
+    
+    if (match_auto) {
+        // Start auto test
+        auto_test_active = true;
+        printc("\n>> Starting I2C auto test...\n");
+        // Call once to start the state machine
+        i2c_run_auto_test();
+        return 0;
+    } else if (match_not_reserved) {
+        // Run not_reserved test immediately (it's synchronous)
+        return i2c_test_not_reserved();
+    } else {
+        printc("Unknown test operation '%s'\n", op);
+        printc("Valid operations: auto, not_reserved\n");
+        return MOD_ERR_BAD_CMD;
+    }
 }
