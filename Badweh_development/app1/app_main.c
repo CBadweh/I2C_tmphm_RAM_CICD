@@ -41,13 +41,6 @@
 #include "tmr.h"         // Timer for periodic sampling
 #include "ttys.h"        // Serial UART
 #include "module.h"      // Module framework
-#include "stat.h"        // Statistics
-#include "log.h"         // Logging macros
-
-// Day 4: Fault Handling and Watchdog
-#include "fault.h"       // Fault detection and handling
-#include "wdg.h"         // Watchdog protection
-#include "flash.h"       // Flash storage (for fault diagnostics)
 
 // Removed (not needed for Day 3):
 // #include "blinky.h"   - Visual indicator, not critical
@@ -62,56 +55,23 @@
 // Type definitions
 ////////////////////////////////////////////////////////////////////////////////
 
-enum main_u16_pms {
-    CNT_INIT_ERR,
-    CNT_START_ERR,
-    CNT_RUN_ERR,
-
-    NUM_U16_PMS
-};
 
 ////////////////////////////////////////////////////////////////////////////////
 // Private (static) function declarations
 ////////////////////////////////////////////////////////////////////////////////
 
-static int32_t cmd_main_status();
-static int32_t cmd_main_fault();
-
 ////////////////////////////////////////////////////////////////////////////////
 // Private (static) variables
 ////////////////////////////////////////////////////////////////////////////////
 
-static int32_t log_level = LOG_DEFAULT;
-
-static struct cmd_cmd_info cmds[] = {
-    {
-        .name = "status",
-        .func = cmd_main_status,
-        .help = "Get main status, usage: main status [clear]",
-    },
-    {
-        .name = "fault",
-        .func = cmd_main_fault,
-        .help = "Trigger test fault, usage: main fault",
-    },
-};
-
-static uint16_t cnts_u16[NUM_U16_PMS];
-
-static const char* cnts_u16_names[NUM_U16_PMS] = {
-    "init err",
-    "start err",
-    "run err",
-};
-
 static struct cmd_client_info cmd_info = {
     .name = "main",
-    .num_cmds = ARRAY_SIZE(cmds),
-    .cmds = cmds,
-    .log_level_ptr = &log_level,
-    .num_u16_pms = NUM_U16_PMS,
-    .u16_pms = cnts_u16,
-    .u16_pm_names = cnts_u16_names,
+    .num_cmds = 0,
+    .cmds = NULL,
+    .log_level_ptr = NULL,
+    .num_u16_pms = 0,
+    .u16_pms = NULL,
+    .u16_pm_names = NULL,
 };
 
 
@@ -168,8 +128,6 @@ static struct dio_cfg dio_cfg = {
     .num_outputs = ARRAY_SIZE(d_outputs),
     .outputs = d_outputs,
 };
-
-static struct stat_dur stat_loop_dur;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Public (global) variables and externs
@@ -228,15 +186,10 @@ void app_main(void)
     tmphm_cfg.i2c_instance_id = I2C_INSTANCE_3;  // Tell TMPHM to use I2C bus 3
     tmphm_init(TMPHM_INSTANCE_1, &tmphm_cfg);
 
-    fault_init(NULL);     // EARLY: Just captures reset reason
-    wdg_init(NULL);
-    // NOTE: flash and lwl don't have init(), only start()
+    // NOTE: lwl doesn't have init(), only start()
 
     // ===== START PHASE: Enable modules for operation =====
     printc("\n[START] Starting modules...\n");
-    
-    // Day 4: Start hardware watchdog EARLY (protect initialization)
-    wdg_start_init_hdw_wdg();  // ADD THIS - protect init phase
 
     // Serial UART
     ttys_start(TTYS_INSTANCE_UART2);
@@ -252,12 +205,6 @@ void app_main(void)
     
     // TMPHM Module (registers 1-second timer - YOUR CODE DOES THIS!)
     tmphm_start(TMPHM_INSTANCE_1);
-
-    // Day 4: Start Watchdog Module (start periodic checker)
-    wdg_start();  // ADD THIS
-
-    // Flash - Required by fault handler for panic data storage
-    flash_start();
     
     // LWL Logging (Day 3 afternoon - flight recorder)
     lwl_start();
@@ -268,25 +215,12 @@ void app_main(void)
     // Console commands
     cmd_register(&cmd_info);
 
-    stat_dur_init(&stat_loop_dur);
-
-    // Day 4: Mark initialization as successful (reset init failure counter)
-    wdg_init_successful();  // ADD THIS
-
-    // Day 4: Start runtime hardware watchdog
-    wdg_start_hdw_wdg(CONFIG_WDG_HARD_TIMEOUT_MS);  // ADD THIS
-
-    // Day 4: Start Fault Module (watchdog callback, stack pattern, MPU)
-    fault_start();
-
     // ===== SUPER LOOP: Run modules continuously =====
     printc("\n[READY] Entering super loop...\n");
     printc("Waiting for sensor readings (every 1 second)...\n\n");
 
     while (1)
     {
-        stat_dur_restart(&stat_loop_dur);
-
         // Console - Handle user commands
         console_run();
 
@@ -307,7 +241,7 @@ void app_main(void)
             }
             // Poll the auto test state machine only if test hasn't completed yet
             if (!test_completed) {
-                if (i2c_run_auto_test() > 0) {
+                if (i2c_test_not_reserved() > 0) {
                     printc(">> I2C auto test completed\n\n");
                     test_completed = true;  // Mark test as done for this press
                 }
@@ -318,88 +252,4 @@ void app_main(void)
             test_completed = false;
         }
     }
-}
-
-////////////////////////////////////////////////////////////////////////////////
-// Private (static) functions
-////////////////////////////////////////////////////////////////////////////////
-
-/*
- * @brief Console command function for "main status".
- *
- * @param[in] argc Number of arguments, including "main"
- * @param[in] argv Argument values, including "main"
- *
- * @return 0 for success, else a "MOD_ERR" value. See code for details.
- *
- * Command usage: main status [clear]
- */
-static int32_t cmd_main_status(int32_t argc, const char** argv)
-{
-    bool clear = false;
-    bool bad_arg = false;
-
-    if (argc == 3) {
-        if (strcasecmp(argv[2], "clear") == 0)
-            clear = true;
-        else
-            bad_arg = true;
-    } else if (argc > 3) {
-        bad_arg = true;
-    }
-
-    if (bad_arg) {
-        printc("Invalid arguments\n");
-        return MOD_ERR_ARG;
-    }
-
-    printc("Super loop samples=%lu min=%lu ms, max=%lu ms, avg=%lu us\n",
-           stat_loop_dur.samples, stat_loop_dur.min, stat_loop_dur.max,
-           stat_dur_avg_us(&stat_loop_dur));
-
-    if (clear) {
-        printc("Clearing loop stat\n");
-        stat_dur_init(&stat_loop_dur);
-    }
-    return 0;
-}
-
-/*
- * @brief Console command function for "main fault".
- *
- * @param[in] argc Number of arguments, including "main"
- * @param[in] argv Argument values, including "main"
- *
- * @return 0 for success, else a "MOD_ERR" value. See code for details.
- *
- * Command usage: main fault
- *
- * NOTE: This is a TEST FUNCTION for fault injection testing.
- *       DO NOT LEAVE ENABLED IN PRODUCTION CODE!
- */
-static int32_t cmd_main_fault(int32_t argc, const char** argv)
-{
-    (void)argc;  // Suppress unused parameter warning
-    (void)argv;  // Suppress unused parameter warning
-    
-    printc("\n");
-    printc("========================================\n");
-    printc("  !!! TRIGGERING TEST FAULT !!!\n");
-    printc("========================================\n");
-    printc("Method: Invalid memory access\n");
-    printc("Expected: HardFault -> fault_detected()\n");
-    printc("System will crash and reset...\n");
-    printc("Watch for fault diagnostics in flash!\n");
-    printc("========================================\n\n");
-    
-    // Give time for console output to flush (UART is buffered)
-    for (volatile int i = 0; i < 200000; i++);
-    
-    // Method 1: Write to invalid high memory (GUARANTEED fault on STM32)
-    // 0xFFFFFFFF is not mapped to any valid memory/peripheral
-    uint32_t *bad_ptr = (uint32_t*)0xFFFFFFFF;
-    *bad_ptr = 0x12345678;  // BOOM! BusFault or HardFault
-    
-    // This line will NEVER execute
-    return 0;
 }

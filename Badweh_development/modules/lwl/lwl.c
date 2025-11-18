@@ -51,7 +51,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #define LWL_BASE_ID 1
-#define LWL_NUM 4
+//#define LWL_NUM 4
 
 #ifdef CONFIG_LWL_BUF_SIZE
     #define LWL_BUF_SIZE (CONFIG_LWL_BUF_SIZE)

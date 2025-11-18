@@ -497,7 +497,7 @@ int32_t i2c_run_auto_test(void)
             msg_len = 6;  // temp(2) + CRC + hum(2) + CRC
             rc = i2c_read(instance_id, 0x44, msg_bfr, msg_len);
             if (rc != 0){
-                printc("Read start failed: %d\n", rc);
+                printc("Read start failed: %d\n", (int)rc);
                 i2c_release(instance_id);
                 test_state = 0;
                 return rc;
@@ -522,7 +522,7 @@ int32_t i2c_run_auto_test(void)
         case 5:  // Release the bus
             rc = i2c_release(instance_id);
             if (rc != 0) {
-                printc("I2C_RELEASE_FAIL: %d\n", rc);
+                printc("I2C_RELEASE_FAIL: %d\n", (int)rc);
                 return rc;
             }
             test_state = 0;  // Reset for next test
@@ -532,4 +532,70 @@ int32_t i2c_run_auto_test(void)
             test_state = 0;
             return 1;
     }
+}
+
+/*
+ * TEST: Fault Injection - "Not Reserved" Error
+ *
+ * Purpose: Verify that i2c_write() and i2c_read() correctly detect
+ *          when called without first calling i2c_reserve()
+ *
+ * Expected: Both should return MOD_ERR_NOT_RESERVED (-8)
+ */
+int32_t i2c_test_not_reserved(void)
+{
+    enum i2c_instance_id instance_id = I2C_INSTANCE_3;
+    uint8_t test_buffer[2] = {0x2c, 0x06};
+    int32_t rc;
+
+    printc("\n========================================\n");
+    printc("  TEST: Not Reserved Error Detection\n");
+    printc("========================================\n");
+
+    // Test 1: Try to write WITHOUT reserving first
+    printc("\n[TEST 1] Calling i2c_write() WITHOUT i2c_reserve()...\n");
+    rc = i2c_write(instance_id, 0x44, test_buffer, 2);
+
+    if (rc == MOD_ERR_NOT_RESERVED) {
+        printc("  ✓ PASS: Correctly returned MOD_ERR_NOT_RESERVED (%d)\n", (int)rc);
+    } else {
+        printc("  ✗ FAIL: Expected MOD_ERR_NOT_RESERVED, got %d\n", (int)rc);
+        return 1;  // Test failed
+    }
+
+    // Test 2: Try to read WITHOUT reserving first
+    printc("\n[TEST 2] Calling i2c_read() WITHOUT i2c_reserve()...\n");
+    rc = i2c_read(instance_id, 0x44, test_buffer, 2);
+
+    if (rc == MOD_ERR_NOT_RESERVED) {
+        printc("  ✓ PASS: Correctly returned MOD_ERR_NOT_RESERVED (%d)\n", (int)rc);
+    } else {
+        printc("  ✗ FAIL: Expected MOD_ERR_NOT_RESERVED, got %d\n", (int)rc);
+        return 1;  // Test failed
+    }
+
+    // Test 3: Verify that proper sequence still works
+    printc("\n[TEST 3] Verifying proper sequence (reserve → write) still works...\n");
+    rc = i2c_reserve(instance_id);
+    if (rc != 0) {
+        printc("  ✗ FAIL: i2c_reserve() failed: %d\n", (int)rc);
+        return 1;
+    }
+
+    rc = i2c_write(instance_id, 0x44, test_buffer, 2);
+    if (rc == 0) {
+        printc("  ✓ PASS: Proper sequence works (reserved → write succeeded)\n");
+        // Clean up: release the bus
+        i2c_release(instance_id);
+    } else {
+        printc("  ✗ FAIL: Write failed after reserve: %d\n", (int)rc);
+        i2c_release(instance_id);
+        return 1;
+    }
+
+    printc("\n========================================\n");
+    printc("  All tests passed!\n");
+    printc("========================================\n\n");
+
+    return 1;  // All tests passed
 }

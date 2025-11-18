@@ -28,7 +28,7 @@
 #include "module.h"
 #include "tmr.h"
 #include "tmphm.h"
-#include "wdg.h"      // <-- ADD THIS LINE
+//#include "wdg.h"      // Removed - wdg module not needed      // <-- ADD THIS LINE
 
 enum states {
     STATE_IDLE,
@@ -114,13 +114,13 @@ int32_t tmphm_start(enum tmphm_instance_id instance_id)
 		return MOD_ERR_RESOURCE;
 	}
     // **ADD THESE LINES - Register TMPHM watchdog with 5-second timeout**
-    int32_t rc = wdg_register(CONFIG_TMPHM_WDG_ID, 5000);
-    if (rc < 0) {
-        log_error("tmphm_start: wdg_register error %d\n", rc);
-        return rc;
-    }
-    log_info("tmphm_start: Registered watchdog %d with 5s timeout\n",
-             CONFIG_TMPHM_WDG_ID);
+    // int32_t rc = wdg_register(CONFIG_TMPHM_WDG_ID, 5000);
+    // if (rc < 0) {
+    // log_error("tmphm_start: wdg_register error %d\n", rc);
+    // return rc;
+    // }
+    // log_info("tmphm_start: Registered watchdog %d with 5s timeout\n",
+    // CONFIG_TMPHM_WDG_ID);
 
     return 0;
 }
@@ -200,7 +200,7 @@ int32_t tmphm_run(enum tmphm_instance_id instance_id){
                         st.got_meas = true;  // We have valid data now!
 
                         // **ADD THIS LINE - Feed watchdog after successful measurement!**
-                        wdg_feed(CONFIG_TMPHM_WDG_ID);
+                        // wdg_feed(CONFIG_TMPHM_WDG_ID);
 
 //                        log_info("temp=%ld degC*10 hum=%lu %%*10\n", temp, hum);
         			}

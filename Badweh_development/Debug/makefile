@@ -9,22 +9,15 @@ RM := rm -rf
 
 # All of the sources participating in the build are defined here
 -include sources.mk
--include modules/wdg/subdir.mk
 -include modules/ttys/subdir.mk
 -include modules/tmr/subdir.mk
 -include modules/tmphm/subdir.mk
--include modules/stat/subdir.mk
--include modules/mem/subdir.mk
 -include modules/lwl/subdir.mk
 -include modules/log/subdir.mk
 -include modules/i2c/subdir.mk
--include modules/gps_gtu7/subdir.mk
--include modules/flash/subdir.mk
--include modules/fault/subdir.mk
 -include modules/dio/subdir.mk
 -include modules/console/subdir.mk
 -include modules/cmd/subdir.mk
--include modules/blinky/subdir.mk
 -include app1/subdir.mk
 -include Drivers/STM32F4xx_HAL_Driver/Src/subdir.mk
 -include Core/Startup/subdir.mk
@@ -69,9 +62,6 @@ default.size.stdout \
 OBJDUMP_LIST += \
 Badweh_Development.list \
 
-OBJCOPY_BIN += \
-Badweh_Development.bin \
-
 
 # All Target
 all: main-build
@@ -95,17 +85,12 @@ Badweh_Development.list: $(EXECUTABLES) makefile objects.list $(OPTIONAL_TOOL_DE
 	@echo 'Finished building: $@'
 	@echo ' '
 
-Badweh_Development.bin: $(EXECUTABLES) makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-objcopy  -O binary $(EXECUTABLES) "Badweh_Development.bin"
-	@echo 'Finished building: $@'
-	@echo ' '
-
 # Other Targets
 clean:
-	-$(RM) Badweh_Development.bin Badweh_Development.elf Badweh_Development.list Badweh_Development.map default.size.stdout
+	-$(RM) Badweh_Development.elf Badweh_Development.list Badweh_Development.map default.size.stdout
 	-@echo ' '
 
-secondary-outputs: $(SIZE_OUTPUT) $(OBJDUMP_LIST) $(OBJCOPY_BIN)
+secondary-outputs: $(SIZE_OUTPUT) $(OBJDUMP_LIST)
 
 fail-specified-linker-script-missing:
 	@echo 'Error: Cannot find the specified linker script. Check the linker settings in the build configuration.'
