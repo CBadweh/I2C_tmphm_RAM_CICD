@@ -111,9 +111,32 @@ Connect serial terminal to view console output:
 Use console commands to test I2C error detection...
 ```
 
+## Fault Injection Testing
+
+This project includes professional-grade fault injection capabilities for automated error path testing. Fault injection allows you to simulate real-world failures (sensor unplugged, wrong I2C address, etc.) without physical hardware changes.
+
+**Key features:**
+- ✅ Software-only fault simulation (no hardware changes needed)
+- ✅ Toggle-based control for flexible CI/CD automation
+- ✅ Zero production overhead (only enabled in Debug builds)
+- ✅ Industry-standard testing approach (used in automotive/aerospace/medical)
+
+**Quick usage:**
+```
+>> i2c test wrong_addr    # Toggle wrong address fault
+>> i2c test auto          # Run test with fault active
+>> i2c test wrong_addr    # Disable fault
+```
+
+For complete documentation, see `docs/fault-injection.md`
+
+**Note:** Fault injection is only available in Debug builds. Release builds have zero testing overhead.
+
 ## Documentation
 
 - Hardware pinout: `docs/pinout.md`
+- Fault injection testing: `docs/fault-injection.md`
+- Build instructions: `docs/build.md`
 - I2C driver documentation: `Badweh_Development/modules/i2c/`
 - Temperature/Humidity module: `Badweh_Development/modules/tmphm/`
 
