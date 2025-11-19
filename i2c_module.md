@@ -1386,6 +1386,183 @@ This session adds professional-grade fault injection capabilities to enable auto
 
 ---
 
+## Understanding Fault Injection: The Fundamentals
+
+### The Core Problem: Testing Error Handling is Hard
+
+**The Challenge:**
+You write error handling code, but how do you test it? Consider your I2C driver:
+
+```c
+// Your driver has error handling:
+if (sr1 & I2C_SR1_AF)
+    i2c_error = I2C_ERR_ACK_FAIL;  // Slave didn't ACK
+```
+
+**Traditional testing approaches:**
+1. ❌ **Unplug the sensor** → Manual, not repeatable, can't automate
+2. ❌ **Hardcode wrong address** → Requires code changes, easy to forget to revert
+3. ❌ **Hope errors happen naturally** → Unreliable, can't test on demand
+
+**Result:** Error handling code often goes **untested** → bugs slip into production.
+
+---
+
+### What Fault Injection Does
+
+**Fault injection** lets you trigger errors **on demand**, in software, without hardware changes.
+
+**The Concept:**
+Instead of waiting for real failures, you **inject simulated failures** to exercise your error paths.
+
+**Your I2C Example:**
+- **Wrong address fault:** Use `0x45` instead of `0x44` → triggers `I2C_ERR_ACK_FAIL`
+- **Timeout fault:** Force guard timer to expire → triggers `I2C_ERR_GUARD_TMR`
+
+---
+
+### How It Makes Code Robust
+
+#### 1. **Exercise Error Paths**
+
+**Without fault injection:**
+```c
+// This code exists but is never tested:
+op_stop_fail(st, I2C_ERR_ACK_FAIL);  // ← Does this actually work?
+```
+
+**With fault injection:**
+```c
+// Console command: "i2c test wrong_addr"
+// → Forces ACK_FAIL error
+// → Verifies op_stop_fail() works correctly
+// → Confirms state machine recovers properly
+```
+
+#### 2. **Catch Bugs Before Production**
+
+**Real-world scenario:**
+```c
+// Bug: Forgot to clear error flag after recovery
+op_stop_fail(st, I2C_ERR_ACK_FAIL);
+// ... later ...
+if (st->last_op_error == I2C_ERR_NONE)  // ← Still has old error!
+    return 0;  // Wrong! Should check for error
+```
+
+**Fault injection catches this:**
+- Test fails → you find the bug
+- Fix it → test passes
+- Prevents production failures
+
+#### 3. **Verify Recovery Behavior**
+
+**Critical question:** After an error, can the driver handle the next operation?
+
+**Without fault injection:**
+- Hard to test recovery
+- Manual testing is slow
+
+**With fault injection:**
+```c
+// Automated test sequence:
+1. Enable fault → trigger error
+2. Verify error detected correctly
+3. Disable fault → try normal operation
+4. Verify system recovered (next operation works)
+```
+
+#### 4. **Document Expected Behavior**
+
+**Fault injection tests become documentation:**
+```c
+// Test shows: "When sensor is unplugged, driver should:
+// - Detect I2C_ERR_ACK_FAIL
+// - Clean up state machine
+// - Return to IDLE state
+// - Allow next operation to succeed"
+```
+
+---
+
+### How CI/CD Uses It
+
+**The Automation Flow:**
+
+```python
+# CI/CD Pipeline (automated):
+1. Build firmware
+2. Flash to test board
+3. Send UART command: "i2c test wrong_addr"  # Enable fault
+4. Send UART command: "i2c test auto"         # Run test
+5. Parse output: Check for "I2C_ERR_ACK_FAIL"  # Verify error detected
+6. Send UART command: "i2c test wrong_addr"   # Disable fault
+7. Send UART command: "i2c test auto"         # Verify recovery
+8. Parse output: Check for "SUCCESS"           # Verify recovery works
+9. Report: ✅ All error paths tested
+```
+
+**Benefits:**
+- ✅ Runs on every code change
+- ✅ Catches regressions automatically
+- ✅ Provides test evidence for certification
+- ✅ No manual intervention needed
+
+---
+
+### Real-World Impact
+
+**Scenario:** Your I2C driver is deployed in a product.
+
+**Without fault injection testing:**
+- ❌ Error handling may be untested
+- ❌ Production failures discovered by customers
+- ❌ Hard to reproduce issues
+- ❌ Expensive field fixes
+
+**With fault injection testing:**
+- ✅ Error paths verified before release
+- ✅ Recovery behavior validated
+- ✅ Issues caught in development
+- ✅ Higher confidence in production code
+
+---
+
+### The Professional Standard
+
+**Industry Requirements:**
+- **Automotive (ISO 26262):** Fault injection required for safety certification
+- **Aerospace:** Software fault injection for mission-critical systems
+- **Medical devices:** Error path testing for regulatory approval
+
+**Why it matters:**
+- Testing happy paths is not enough
+- Error handling must be verified
+- Automation enables consistent testing
+- Repeatable tests provide evidence
+
+---
+
+### Summary: The "Why"
+
+**Purpose of fault injection:**
+1. ✅ Test error handling code that's hard to trigger naturally
+2. ✅ Verify recovery behavior after failures
+3. ✅ Catch bugs in error paths before production
+4. ✅ Enable automated testing in CI/CD pipelines
+5. ✅ Meet industry standards for robust systems
+
+**How it makes code robust:**
+- ✅ Exercises error paths regularly
+- ✅ Validates recovery mechanisms
+- ✅ Catches regressions automatically
+- ✅ Documents expected error behavior
+- ✅ Provides confidence in production code
+
+**Bottom line:** Fault injection turns **"hope it works"** into **"proven it works"** for error handling.
+
+---
+
 ### Why Fault Injection is Better Than Hardcoding
 
 #### Current Approach (Hardcoded - Not Good):

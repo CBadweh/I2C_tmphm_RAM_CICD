@@ -108,6 +108,7 @@ int32_t i2c_test_not_reserved(void);
 // Only available in Debug builds - removed from Release builds
 int32_t i2c_test_wrong_addr(void);
 int32_t i2c_test_nack(void);
+int32_t i2c_test_timeout(void);
 #endif
 
 #endif // _I2C_H_

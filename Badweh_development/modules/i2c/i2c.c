@@ -94,6 +94,7 @@ static void i2c_interrupt(enum i2c_instance_id instance_id,
                           enum interrupt_type inter_type);
 static enum tmr_cb_action tmr_callback(int32_t tmr_id, uint32_t user_data);
 static int32_t cmd_i2c_test(int32_t argc, const char** argv);
+static void op_stop_fail(struct i2c_state* st, enum i2c_errors error);
 
 ////////////////////////////////////////////////////////////////////////////////
 // PRIVATE VARIABLES
@@ -109,6 +110,7 @@ static bool auto_test_active = false;
 // Only compiled in Debug builds - completely removed from Release builds
 static bool fault_inject_wrong_addr = false;  // Simulate wrong I2C address
 static bool fault_inject_nack = false;        // Simulate NACK (unplugged sensor)
+static bool fault_inject_timeout = false;     // Simulate timeout (stuck operation)
 #endif
 
 // Command registration
@@ -116,7 +118,7 @@ static struct cmd_cmd_info cmds[] = {
     {
         .name = "test",
         .func = cmd_i2c_test,
-        .help = "Run test, usage: i2c test [auto|not_reserved|wrong_addr|nack] (enter no args for help)",
+        .help = "Run test, usage: i2c test [auto|not_reserved] (enter no args for help)",
     },
 };
 
@@ -340,8 +342,16 @@ LL_I2C_GenerateStartCondition(st->i2c_reg_base);
 ENABLE_ALL_INTERRUPTS(st);
 
 // Arm guard timer to catch stalled transactions
-if (st->guard_tmr_id >= 0)
+if (st->guard_tmr_id >= 0) {
+#ifdef ENABLE_FAULT_INJECTION
+    // Fault injection: use 1ms timeout if enabled (forces timeout before operation completes)
+    uint32_t timeout_ms = fault_inject_timeout ? 1 : st->cfg.transaction_guard_time_ms;
+    tmr_inst_start(st->guard_tmr_id, timeout_ms);
+#else
+    // Zero overhead in production builds
     tmr_inst_start(st->guard_tmr_id, st->cfg.transaction_guard_time_ms);
+#endif
+}
 
 return 0;  // Success - operation started
 }
@@ -401,8 +411,16 @@ LL_I2C_GenerateStartCondition(st->i2c_reg_base);
 ENABLE_ALL_INTERRUPTS(st);
 
 // Arm guard timer to catch stalled transactions
-if (st->guard_tmr_id >= 0)
+if (st->guard_tmr_id >= 0) {
+#ifdef ENABLE_FAULT_INJECTION
+    // Fault injection: use 1ms timeout if enabled (forces timeout before operation completes)
+    uint32_t timeout_ms = fault_inject_timeout ? 1 : st->cfg.transaction_guard_time_ms;
+    tmr_inst_start(st->guard_tmr_id, timeout_ms);
+#else
+    // Zero overhead in production builds
     tmr_inst_start(st->guard_tmr_id, st->cfg.transaction_guard_time_ms);
+#endif
+}
 
 return 0;  // Success - operation started
 }
@@ -621,21 +639,20 @@ static void i2c_interrupt(enum i2c_instance_id instance_id,
             return;
         }
 #endif
-
         // Classify the error
         enum i2c_errors i2c_error;
-
+        
         if (sr1 & I2C_SR1_AF)
             i2c_error = I2C_ERR_ACK_FAIL;  // Slave didn't ACK
         else if (sr1 & I2C_SR1_BERR)
             i2c_error = I2C_ERR_BUS_ERR;   // Bus error
         else
             i2c_error = I2C_ERR_INTR_UNEXPECT;  // Unknown
-
+        
         // Clear error flags (required by hardware!)
         st->i2c_reg_base->SR1 &= ~(sr1 & INTERRUPT_ERR_MASK);
 
-
+        
         // Abort operation and clean up
         op_stop_fail(st, i2c_error);
         return;
@@ -824,12 +841,18 @@ int32_t i2c_test_not_reserved(void)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// Fault Injection Test Functions
-// Only compiled in Debug builds - completely removed from Release builds
+// COMMAND HANDLERS
 ////////////////////////////////////////////////////////////////////////////////
 
 #ifdef ENABLE_FAULT_INJECTION
-
+/*
+ * @brief Toggle wrong address fault injection
+ *
+ * Toggles the wrong address fault injection flag. When enabled, I2C operations
+ * use address 0x45 instead of the actual address, simulating a non-existent device.
+ *
+ * @return 0 for success
+ */
 int32_t i2c_test_wrong_addr(void)
 {
     // Toggle the fault injection flag
@@ -846,10 +869,17 @@ int32_t i2c_test_wrong_addr(void)
         printc("  Normal addressing restored\n");
     }
     printc("========================================\n\n");
-
-    return 0;  // Success
+    return 0;
 }
 
+/*
+ * @brief Toggle NACK fault injection
+ *
+ * Toggles the NACK fault injection flag. When enabled, any I2C error
+ * is forced to become ACK_FAIL, simulating an unplugged sensor.
+ *
+ * @return 0 for success
+ */
 int32_t i2c_test_nack(void)
 {
     // Toggle the fault injection flag
@@ -866,15 +896,37 @@ int32_t i2c_test_nack(void)
         printc("  Normal error handling restored\n");
     }
     printc("========================================\n\n");
-
-    return 0;  // Success
+    return 0;
 }
 
-#endif  // ENABLE_FAULT_INJECTION
+/*
+ * @brief Toggle timeout fault injection
+ *
+ * Toggles the timeout fault injection flag. When enabled, I2C operations
+ * use a 1ms timeout instead of the normal guard time, forcing timeout errors.
+ *
+ * @return 0 for success
+ */
+int32_t i2c_test_timeout(void)
+{
+    // Toggle the fault injection flag
+    fault_inject_timeout = !fault_inject_timeout;
 
-////////////////////////////////////////////////////////////////////////////////
-// COMMAND HANDLERS
-////////////////////////////////////////////////////////////////////////////////
+    printc("\n========================================\n");
+    printc("  Fault Injection: Timeout\n");
+    printc("========================================\n");
+    printc("  Status: %s\n", fault_inject_timeout ? "ENABLED" : "DISABLED");
+    if (fault_inject_timeout) {
+        printc("  Next I2C operation will use 1ms timeout instead of %dms\n", 
+               CONFIG_I2C_DFLT_TRANS_GUARD_TIME_MS);
+        printc("  This simulates a stuck operation (sensor crashed, bus stuck)\n");
+    } else {
+        printc("  Normal timeout restored\n");
+    }
+    printc("========================================\n\n");
+    return 0;
+}
+#endif  // ENABLE_FAULT_INJECTION
 
 /*
  * Command handler for "i2c test" command
@@ -885,12 +937,12 @@ static int32_t cmd_i2c_test(int32_t argc, const char** argv)
     if (argc == 2) {
         printc("Test operations:\n"
                "  Run auto test: i2c test auto\n"
-               "  Test not reserved: i2c test not_reserved\n"
+               "  Test not reserved: i2c test not_reserved\n");
 #ifdef ENABLE_FAULT_INJECTION
-               "  Toggle wrong addr fault: i2c test wrong_addr\n"
-               "  Toggle NACK fault: i2c test nack\n"
+        printc("  Toggle wrong addr fault: i2c test wrong_addr\n");
+        printc("  Toggle NACK fault: i2c test nack\n");
+        printc("  Toggle timeout fault: i2c test timeout\n");
 #endif
-        );
         return 0;
     }
     
@@ -906,6 +958,7 @@ static int32_t cmd_i2c_test(int32_t argc, const char** argv)
 #ifdef ENABLE_FAULT_INJECTION
     int match_wrong_addr = 0;
     int match_nack = 0;
+    int match_timeout = 0;
 #endif
     
     // Simple case-insensitive comparison
@@ -932,16 +985,17 @@ static int32_t cmd_i2c_test(int32_t argc, const char** argv)
     }
 #ifdef ENABLE_FAULT_INJECTION
     else if ((op[0] == 'w' || op[0] == 'W') &&
-               (op[1] == 'r' || op[1] == 'R') &&
-               (op[2] == 'o' || op[2] == 'O') &&
-               (op[3] == 'n' || op[3] == 'N') &&
-               (op[4] == 'g' || op[4] == 'G') &&
-               op[5] == '_' &&
-               (op[6] == 'a' || op[6] == 'A') &&
-               (op[7] == 'd' || op[7] == 'D') &&
-               (op[8] == 'd' || op[8] == 'D') &&
-               (op[9] == 'r' || op[9] == 'R') &&
-               op[10] == '\0') {
+             (op[1] == 'r' || op[1] == 'R') &&
+             (op[2] == 'o' || op[2] == 'O') &&
+             (op[3] == 'n' || op[3] == 'N') &&
+             (op[4] == 'g' || op[4] == 'G') &&
+             op[5] == '_' &&
+             (op[6] == 'a' || op[6] == 'A') &&
+             (op[7] == 'd' || op[7] == 'D') &&
+             (op[8] == 'd' || op[8] == 'D') &&
+             (op[9] == 'r' || op[9] == 'R') &&
+             (op[10] == 'r' || op[10] == 'R') &&
+             op[11] == '\0') {
         match_wrong_addr = 1;
     } else if ((op[0] == 'n' || op[0] == 'N') &&
                (op[1] == 'a' || op[1] == 'A') &&
@@ -949,9 +1003,18 @@ static int32_t cmd_i2c_test(int32_t argc, const char** argv)
                (op[3] == 'k' || op[3] == 'K') &&
                op[4] == '\0') {
         match_nack = 1;
+    } else if ((op[0] == 't' || op[0] == 'T') &&
+               (op[1] == 'i' || op[1] == 'I') &&
+               (op[2] == 'm' || op[2] == 'M') &&
+               (op[3] == 'e' || op[3] == 'E') &&
+               (op[4] == 'o' || op[4] == 'O') &&
+               (op[5] == 'u' || op[5] == 'U') &&
+               (op[6] == 't' || op[6] == 'T') &&
+               op[7] == '\0') {
+        match_timeout = 1;
     }
 #endif
-
+    
     if (match_auto) {
         // Start auto test
         auto_test_active = true;
@@ -962,23 +1025,24 @@ static int32_t cmd_i2c_test(int32_t argc, const char** argv)
     } else if (match_not_reserved) {
         // Run not_reserved test immediately (it's synchronous)
         return i2c_test_not_reserved();
-    }
 #ifdef ENABLE_FAULT_INJECTION
-    else if (match_wrong_addr) {
+    } else if (match_wrong_addr) {
         // Toggle wrong address fault injection
         return i2c_test_wrong_addr();
     } else if (match_nack) {
         // Toggle NACK fault injection
         return i2c_test_nack();
-    }
+    } else if (match_timeout) {
+        // Toggle timeout fault injection
+        return i2c_test_timeout();
 #endif
-    else {
+    } else {
         printc("Unknown test operation '%s'\n", op);
-        printc("Valid operations: auto, not_reserved"
+        printc("Valid operations: auto, not_reserved");
 #ifdef ENABLE_FAULT_INJECTION
-               ", wrong_addr, nack"
+        printc(", wrong_addr, nack, timeout");
 #endif
-               "\n");
+        printc("\n");
         return MOD_ERR_BAD_CMD;
     }
 }
