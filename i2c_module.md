@@ -5867,3 +5867,409 @@ You now think like a senior engineer. 🚀
 
 ---
 
+## Fault Injection Pattern Comparison: Toggle vs Execute-Immediately
+
+### The Question
+
+When implementing fault injection tests, there are two common patterns:
+
+**Pattern A: Toggle Flag (Current Implementation)**
+```
+>> i2c test wrong_addr    # Toggle fault injection ON
+>> i2c test auto          # Execute test (with fault active)
+```
+
+**Pattern B: Execute Immediately**
+```
+>> i2c test wrong_addr    # Execute test with fault injection (like i2c_test_not_reserved)
+```
+
+**Question:** Which is industry best practice and why?
+
+---
+
+### Pattern A: Toggle Flag (State-Based Fault Injection)
+
+**How it works:**
+```c
+// Command just toggles the flag
+int32_t i2c_test_wrong_addr(void) {
+    fault_inject_wrong_addr = !fault_inject_wrong_addr;
+    printc("Fault injection: %s\n", fault_inject_wrong_addr ? "ENABLED" : "DISABLED");
+    return 0;
+}
+
+// Separate test function executes the operation
+int32_t i2c_run_auto_test(void) {
+    // ... performs actual I2C write/read
+    // Fault injection happens automatically if flag is set
+}
+```
+
+**Usage:**
+```
+>> i2c test wrong_addr    # Enable fault
+>> i2c test auto          # Run test (fault active)
+>> i2c test auto          # Run again (fault still active)
+>> i2c test wrong_addr    # Disable fault
+```
+
+---
+
+### Pattern B: Execute Immediately (Action-Based Fault Injection)
+
+**How it works:**
+```c
+// Command performs the test directly
+int32_t i2c_test_wrong_addr(void) {
+    printc("Testing wrong address error...\n");
+
+    // Reserve bus
+    i2c_reserve(I2C_INSTANCE_3);
+
+    // Write to WRONG address (0x45 instead of 0x44)
+    uint8_t tx_data[2] = {0x2c, 0x06};
+    i2c_write(I2C_INSTANCE_3, 0x45, tx_data, 2);  // Hardcoded wrong address
+
+    // Wait for completion
+    int32_t status;
+    do {
+        status = i2c_get_op_status(I2C_INSTANCE_3);
+    } while (status == MOD_ERR_OP_IN_PROG);
+
+    // Check error
+    if (i2c_get_error(I2C_INSTANCE_3) == I2C_ERR_ACK_FAIL) {
+        printc("✅ Test PASSED: ACK_FAIL detected as expected\n");
+    }
+
+    i2c_release(I2C_INSTANCE_3);
+    return 0;
+}
+```
+
+**Usage:**
+```
+>> i2c test wrong_addr    # Execute test immediately, one-shot
+>> i2c test wrong_addr    # Execute again (independent run)
+```
+
+**Example:** This is how `i2c_test_not_reserved()` works - it executes the test immediately.
+
+---
+
+### Comparison Table
+
+| Aspect | **Pattern A: Toggle Flag** | **Pattern B: Execute Immediately** |
+|--------|----------------------------|-------------------------------------|
+| **Usage Complexity** | Requires 2 commands | Single command |
+| **Test Repeatability** | Can run multiple tests with same fault | Each command runs once |
+| **State Management** | Stateful (must remember to disable) | Stateless (self-contained) |
+| **CI/CD Automation** | ⭐ Excellent (flexible test sequences) | Good (simple scripts) |
+| **Risk of Forgetting** | ❌ Can forget to disable fault | ✅ No state to forget |
+| **Flexibility** | ⭐ Very flexible (combine with different tests) | Limited (one test per command) |
+| **Code Complexity** | More complex (flag + injection logic) | Simpler (self-contained test) |
+| **Production Safety** | ⚠️ Risk if fault left enabled | ✅ No persistent state |
+| **Common in Industry** | ⭐ **Automotive, Aerospace, Medical** | Embedded hobbyist projects |
+
+---
+
+### Industry Usage
+
+#### Pattern A (Toggle Flag) - Used By:
+
+**Automotive (ISO 26262):**
+```python
+# Test suite can enable one fault and run multiple scenarios
+uart.send("fault inject sensor_timeout enable\n")
+uart.send("test cruise_control\n")
+uart.send("test emergency_brake\n")
+uart.send("test lane_keep\n")
+uart.send("fault inject sensor_timeout disable\n")
+```
+**Why:** One fault type tested across multiple subsystems
+
+---
+
+**Aerospace (NASA/JPL):**
+```python
+# Test Mars Rover navigation under GPS fault
+uart.send("fault gps_invalid enable\n")
+uart.send("nav drive_forward 5m\n")
+uart.send("nav turn_left 90deg\n")
+uart.send("nav return_to_base\n")
+uart.send("fault gps_invalid disable\n")
+```
+**Why:** One fault persists across complex multi-step operations
+
+---
+
+**Medical Devices (FDA Compliance):**
+```python
+# Test insulin pump under sensor fault
+uart.send("fault glucose_sensor_fail enable\n")
+uart.send("test normal_dose\n")
+uart.send("test high_glucose\n")
+uart.send("test low_glucose\n")
+uart.send("fault glucose_sensor_fail disable\n")
+```
+**Why:** Regulatory requirement to test all scenarios under each fault type
+
+---
+
+#### Pattern B (Execute Immediately) - Used By:
+
+**Simple Embedded Projects:**
+```python
+# Quick validation tests
+uart.send("test_wrong_addr\n")
+uart.send("test_nack\n")
+uart.send("test_timeout\n")
+```
+**Why:** Simple, one-off tests with no complex scenarios
+
+**Unit Testing Frameworks:**
+```c
+TEST(I2C_Tests, WrongAddress) {
+    // Each test is independent, self-contained
+    test_wrong_address();  // Runs entire test
+}
+```
+**Why:** Each test case is isolated
+
+---
+
+### When to Use Each Pattern
+
+#### Use Pattern A (Toggle Flag) When:
+
+✅ **You need to test multiple operations under the same fault**
+- Example: Test write, read, and combined write+read all with NACK fault active
+
+✅ **You're building CI/CD test automation**
+- Example: Jenkins/GitHub Actions running fault scenarios
+
+✅ **You need flexible test combinations**
+- Example: Enable two faults simultaneously (wrong_addr + timeout)
+
+✅ **You follow industry standards (Automotive/Aerospace/Medical)**
+- Required for ISO 26262, DO-178C, IEC 62304 compliance
+
+✅ **You want to test state machines across multiple transitions**
+- Example: Fault active across reserve → write → read → release sequence
+
+---
+
+#### Use Pattern B (Execute Immediately) When:
+
+✅ **You have simple, independent test cases**
+- Example: Quick validation that error detection works
+
+✅ **You want stateless testing**
+- Each test is completely independent
+
+✅ **You're building simple proof-of-concept code**
+- Not for production, just learning/validation
+
+✅ **Tests are run manually during development**
+- Developer convenience, not CI/CD automation
+
+---
+
+### Pros and Cons
+
+#### Pattern A: Toggle Flag
+
+**Pros:**
+- ⭐ **Flexible:** One fault can affect multiple operations
+- ⭐ **Professional:** Industry standard for complex systems
+- ⭐ **CI/CD friendly:** Easy to script complex test sequences
+- ⭐ **Realistic:** Faults often persist across multiple operations in real systems
+- ⭐ **Certification ready:** Meets automotive/aerospace/medical standards
+
+**Cons:**
+- ⚠️ **Stateful:** Must remember to disable fault after testing
+- ⚠️ **Risk:** Forgetting to disable can affect subsequent tests
+- ⚠️ **Complexity:** More code (flag + toggle + injection logic)
+- ⚠️ **Learning curve:** Requires understanding of stateful testing
+
+---
+
+#### Pattern B: Execute Immediately
+
+**Pros:**
+- ✅ **Simple:** One command does everything
+- ✅ **Stateless:** No state to manage
+- ✅ **Safe:** No risk of forgetting to disable
+- ✅ **Easy to understand:** Clear cause and effect
+
+**Cons:**
+- ❌ **Limited:** Can't test multiple operations under same fault
+- ❌ **Less flexible:** Each test is hardcoded
+- ❌ **Not scalable:** Adding new scenarios requires new test functions
+- ❌ **Not industry standard:** Rarely used in professional embedded systems
+
+---
+
+### Industry Best Practice: Pattern A (Toggle Flag) ⭐
+
+**Why Pattern A is considered best practice:**
+
+1. **Reflects Real-World Failures**
+   - Real faults persist across multiple operations (sensor unplugged, bus noise, etc.)
+   - Toggle pattern simulates realistic fault behavior
+
+2. **Meets Certification Requirements**
+   - ISO 26262 (Automotive): Requires fault injection across functional scenarios
+   - DO-178C (Aerospace): Requires persistent fault testing
+   - IEC 62304 (Medical): Requires fault coverage across use cases
+
+3. **CI/CD Automation**
+   - Modern embedded development requires automated testing
+   - Toggle pattern enables complex scripted test sequences
+   - Jenkins/GitHub Actions can run hundreds of fault scenarios
+
+4. **Scalability**
+   - Easy to add new faults without duplicating test code
+   - Test logic separated from fault injection logic
+   - New scenarios don't require new test functions
+
+---
+
+### When Pattern B is Acceptable
+
+Pattern B is acceptable for:
+- ✅ Quick development validation ("does error detection work?")
+- ✅ Learning/educational code (like `i2c_test_not_reserved()`)
+- ✅ Simple proof-of-concept projects
+- ✅ One-off tests that never need to be automated
+
+---
+
+### Hybrid Approach (Best of Both Worlds)
+
+Many professional systems use **both patterns**:
+
+```c
+// Pattern B: Quick validation tests (learning/development)
+int32_t i2c_test_not_reserved(void) {
+    // Execute immediately, self-contained
+}
+
+// Pattern A: Professional fault injection (CI/CD/certification)
+int32_t i2c_test_wrong_addr(void) {
+    // Toggle fault flag
+    fault_inject_wrong_addr = !fault_inject_wrong_addr;
+}
+
+int32_t i2c_test_nack(void) {
+    // Toggle fault flag
+    fault_inject_nack = !fault_inject_nack;
+}
+```
+
+**Why this works:**
+- Pattern B tests validate basic functionality quickly
+- Pattern A tests enable complex automated scenarios
+- Developers get simple manual tests
+- CI/CD gets powerful automation capabilities
+
+---
+
+### Current Implementation Analysis
+
+**Our implementation uses:**
+- ✅ `i2c_test_not_reserved()` - Pattern B (execute immediately)
+- ✅ `i2c_test_wrong_addr()` - Pattern A (toggle flag)
+- ✅ `i2c_test_nack()` - Pattern A (toggle flag)
+
+**This is the recommended hybrid approach!**
+
+**Why `i2c_test_not_reserved()` uses Pattern B:**
+- It's a **state violation test** (calling write/read without reserve)
+- It's a **learning example** showing what happens if you skip reserve
+- It's **self-contained** - doesn't need to persist across multiple operations
+- It's **safe** - cannot accidentally leave system in bad state
+
+**Why fault injection uses Pattern A:**
+- Tests **realistic failure scenarios** (sensor unplugged, wrong address)
+- Enables **CI/CD automation** (scripted test sequences)
+- Follows **industry standards** (automotive/aerospace/medical)
+- Allows **flexible testing** (one fault, multiple operations)
+
+---
+
+### Real-World Example: Automotive Sensor Fault Testing
+
+**Pattern A (Professional CI/CD Test Suite):**
+
+```python
+# Test suite: What happens if temperature sensor fails during driving?
+
+# 1. Enable sensor fault
+uart.send("fault temp_sensor_fail enable\n")
+
+# 2. Test multiple scenarios with fault active
+uart.send("test engine_coolant_monitoring\n")   # Should detect fault
+uart.send("test dashboard_display\n")           # Should show warning
+uart.send("test safe_mode_activation\n")        # Should limit power
+uart.send("test diagnostics_logging\n")         # Should log fault code
+
+# 3. Disable fault
+uart.send("fault temp_sensor_fail disable\n")
+
+# 4. Verify recovery
+uart.send("test normal_operation\n")            # Should resume normal
+```
+
+**Pattern B (Limited):**
+```python
+# Can only test one scenario at a time
+uart.send("test_temp_sensor_fail\n")  # Only tests one hardcoded scenario
+```
+
+**Pattern A is required for ISO 26262 certification because:**
+- Must prove fault is detected across ALL affected subsystems
+- Must prove fault doesn't cause cascading failures
+- Must prove system can recover when fault clears
+- Must have automated, repeatable test evidence
+
+---
+
+### Recommendation
+
+**For this I2C module:**
+
+✅ **Keep current implementation (hybrid approach)**
+- Pattern B for `i2c_test_not_reserved()` - Simple validation
+- Pattern A for fault injection - Professional testing
+
+**For future fault types:**
+- ✅ Use Pattern A (toggle flag) for CI/CD automation
+- ✅ Use Pattern B only for simple state validation tests
+
+**For professional embedded projects:**
+- ⭐ **Always use Pattern A** for safety-critical systems
+- ⭐ **Required** for automotive, aerospace, medical certification
+- ⭐ **Best practice** for modern CI/CD pipelines
+
+---
+
+### Key Takeaway
+
+**Pattern A (Toggle Flag) is industry best practice because:**
+
+1. ✅ Reflects how real faults behave (persistent across operations)
+2. ✅ Enables automated CI/CD testing (flexible scripting)
+3. ✅ Meets certification requirements (ISO 26262, DO-178C, IEC 62304)
+4. ✅ Scalable for complex systems (multiple faults, multiple scenarios)
+5. ✅ Separates fault injection from test logic (cleaner architecture)
+
+**Pattern B (Execute Immediately) is acceptable for:**
+- Quick validation during development
+- Learning examples (like `i2c_test_not_reserved()`)
+- Non-safety-critical hobby projects
+
+**The hybrid approach (both patterns) is recommended for professional embedded systems that need both developer convenience and CI/CD automation.**
+
+---
+
