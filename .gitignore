@@ -1,0 +1,111 @@
+# Build output files (regeneratable)
+*.o
+*.elf
+*.bin
+*.hex
+*.map
+*.list
+*.su
+*.d
+*.cyclo
+
+# Exception: Keep objects.list (required for builds)
+!objects.list
+
+# Debug and Release build directories (keep makefiles)
+Debug/*.o
+Debug/*.elf
+Debug/*.bin
+Debug/*.hex
+Debug/*.map
+Debug/*.list
+Debug/*.su
+Debug/*.d
+Debug/*.cyclo
+Debug/Core/**/*.o
+Debug/Core/**/*.d
+Debug/Core/**/*.su
+Debug/Core/**/*.cyclo
+Debug/Drivers/**/*.o
+Debug/Drivers/**/*.d
+Debug/Drivers/**/*.su
+Debug/Drivers/**/*.cyclo
+
+Release/*.o
+Release/*.elf
+Release/*.bin
+Release/*.hex
+Release/*.map
+Release/*.list
+Release/*.su
+Release/*.d
+Release/*.cyclo
+Release/Core/**/*.o
+Release/Core/**/*.d
+Release/Core/**/*.su
+Release/Core/**/*.cyclo
+Release/Drivers/**/*.o
+Release/Drivers/**/*.d
+Release/Drivers/**/*.su
+Release/Drivers/**/*.cyclo
+
+# STM32CubeIDE metadata and settings (Eclipse-based)
+.settings/
+.metadata/
+.metadata/.ide.log
+.metadata/.plugins/org.eclipse.e4.workbench/workbench.xmi
+.metadata/**/*.log
+.metadata/**/*.ide.log
+RemoteSystemsTempFiles/
+
+# IDE project files (some should be tracked, some not)
+.cproject
+.project
+.classpath
+
+# Drivers folder (IDE-provided, regeneratable from CubeMX)
+Drivers/
+
+# Test results and analysis output (specific XML patterns)
+test-results*.xml
+*-results.xml
+cppcheck-results.xml
+*.cyclo.xml
+# Note: Other XML files (like project configs) will be tracked
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Backup files
+*.bak
+*.old
+*.x
+# Windows duplicate files
+* (1).*
+* (2).*
+* (3).*
+
+# Log files
+*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Project-specific folders (not tracked)
+Progress_Report/
+
+# IDE/Editor personal configuration (keep local, don't share)
+.claude/
+.cursor/
+.cursorrules*
