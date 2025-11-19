@@ -29,22 +29,6 @@
 #define DISABLE_ALL_INTERRUPTS(st) st->i2c_reg_base->CR2 &= ~INTERRUPT_ENABLE_MASK
 #define ENABLE_ALL_INTERRUPTS(st) st->i2c_reg_base->CR2 |= INTERRUPT_ENABLE_MASK
 
-#define INTERRUPT_ERR_MASK_BASE (LL_I2C_SR1_BERR | LL_I2C_SR1_ARLO | \
-                                 LL_I2C_SR1_AF   | LL_I2C_SR1_OVR)
-#ifdef I2C_ISR_TIMEOUT
-#define INTERRUPT_ERR_MASK_TIMEOUT I2C_ISR_TIMEOUT
-#else
-#define INTERRUPT_ERR_MASK_TIMEOUT 0U
-#endif
-#ifdef I2C_ISR_PECERR
-#define INTERRUPT_ERR_MASK_PEC I2C_ISR_PECERR
-#else
-#define INTERRUPT_ERR_MASK_PEC 0U
-#endif
-#define INTERRUPT_ERR_MASK (INTERRUPT_ERR_MASK_BASE | \
-                            INTERRUPT_ERR_MASK_TIMEOUT | \
-                            INTERRUPT_ERR_MASK_PEC)
-
 ////////////////////////////////////////////////////////////////////////////////
 // STATE MACHINE - The heart of the driver
 ////////////////////////////////////////////////////////////////////////////////
@@ -61,7 +45,6 @@ enum states {
 
 enum interrupt_type {
     INTER_TYPE_EVT,                 // Event interrupt
-    INTER_TYPE_ERR,                 // Error interrupt
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -92,7 +75,6 @@ struct i2c_state {
 
 static void i2c_interrupt(enum i2c_instance_id instance_id,
                           enum interrupt_type inter_type);
-static enum tmr_cb_action tmr_callback(int32_t tmr_id, uint32_t user_data);
 static int32_t cmd_i2c_test(int32_t argc, const char** argv);
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -177,10 +159,7 @@ int32_t i2c_start(enum i2c_instance_id instance_id)
     int32_t result;
 
     // Get a timer (for structure, not used in happy path)
-    st->guard_tmr_id = tmr_inst_get_cb(0, tmr_callback, (uint32_t)instance_id);
-    if (st->guard_tmr_id < 0)
-        return MOD_ERR_RESOURCE;
-    
+    st->guard_tmr_id = tmr_inst_get_cb(0, NULL, 0);
 
     // Disable peripheral and interrupts initially
     LL_I2C_Disable(st->i2c_reg_base);
@@ -189,8 +168,6 @@ int32_t i2c_start(enum i2c_instance_id instance_id)
     // Enable I2C3 interrupts in NVIC
     NVIC_SetPriority(I2C3_EV_IRQn, NVIC_EncodePriority(NVIC_GetPriorityGrouping(),0, 0));
     NVIC_EnableIRQ(I2C3_EV_IRQn);
-    NVIC_SetPriority(I2C3_ER_IRQn, NVIC_EncodePriority(NVIC_GetPriorityGrouping(),0, 0));
-    NVIC_EnableIRQ(I2C3_ER_IRQn);
 
     // Register commands
     result = cmd_register(&cmd_info);
@@ -327,10 +304,6 @@ LL_I2C_GenerateStartCondition(st->i2c_reg_base);
 // Enable interrupts (rest happens in interrupt handler!)
 ENABLE_ALL_INTERRUPTS(st);
 
-// Arm guard timer to catch stalled transactions
-if (st->guard_tmr_id >= 0)
-    tmr_inst_start(st->guard_tmr_id, st->cfg.transaction_guard_time_ms);
-
 return 0;  // Success - operation started
 }
 
@@ -383,10 +356,6 @@ LL_I2C_GenerateStartCondition(st->i2c_reg_base);
 // Enable interrupts (rest happens in interrupt handler!)
 ENABLE_ALL_INTERRUPTS(st);
 
-// Arm guard timer to catch stalled transactions
-if (st->guard_tmr_id >= 0)
-    tmr_inst_start(st->guard_tmr_id, st->cfg.transaction_guard_time_ms);
-
 return 0;  // Success - operation started
 }
 
@@ -416,28 +385,7 @@ int32_t i2c_get_op_status(enum i2c_instance_id instance_id)
     if (st->last_op_error == I2C_ERR_NONE)
         return 0;  // Success!
     else
-        return MOD_ERR_PERIPH;  // Failed (use i2c_get_error() for details)
-}
-
-// FAILURE: Clean up and return to IDLE with error
-static void op_stop_fail(struct i2c_state* st, enum i2c_errors error)
-{
-    // Disable all interrupts
-    DISABLE_ALL_INTERRUPTS(st);
-    
-    // Always send STOP to release bus
-    LL_I2C_GenerateStopCondition(st->i2c_reg_base);
-    
-    // Disable peripheral
-    LL_I2C_Disable(st->i2c_reg_base);
-
-    // Disarm guard timer so it cannot fire after cleanup
-    if (st->guard_tmr_id >= 0)
-        tmr_inst_start(st->guard_tmr_id, 0);
-    
-    // Record error and return to IDLE
-    st->last_op_error = error;
-    st->state = STATE_IDLE;
+        return -1;  // Failed (use i2c_get_error() for details)
 }
 
 
@@ -466,11 +414,6 @@ void I2C3_EV_IRQHandler(void)
     i2c_interrupt(I2C_INSTANCE_3, INTER_TYPE_EVT);
 }
 
-void I2C3_ER_IRQHandler(void)
-{
-    i2c_interrupt(I2C_INSTANCE_3, INTER_TYPE_ERR);
-}
-
 ////////////////////////////////////////////////////////////////////////////////
 // INTERRUPT HANDLER - THE HEART OF THE DRIVER
 // 
@@ -484,149 +427,108 @@ static void i2c_interrupt(enum i2c_instance_id instance_id,
     struct i2c_state* st = &i2c_states[instance_id];
     uint16_t sr1 = st->i2c_reg_base->SR1;  // Read status
 
-    if (inter_type == INTER_TYPE_EVT) {
-        switch (st->state) {
+    switch (st->state) {
+    
+        // ===== WRITE SEQUENCE: 3 States =====
         
-            // ===== WRITE SEQUENCE: 3 States =====
-            
-            case STATE_MSTR_WR_GEN_START:
-                // HW sent START? Check SB (Start Bit) flag
-                if (sr1 & LL_I2C_SR1_SB) {
-                    // Send 7-bit address + W bit (0)
-                    st->i2c_reg_base->DR = st->dest_addr << 1;
-                    st->state = STATE_MSTR_WR_SENDING_ADDR;
-                }
-                break;
+        case STATE_MSTR_WR_GEN_START:
+            // HW sent START? Check SB (Start Bit) flag
+            if (sr1 & LL_I2C_SR1_SB) {
+                // Send 7-bit address + W bit (0)
+                st->i2c_reg_base->DR = st->dest_addr << 1;
+                st->state = STATE_MSTR_WR_SENDING_ADDR;
+            }
+            break;
 
-            case STATE_MSTR_WR_SENDING_ADDR:
-                // Slave ACKed the address?
-                if (sr1 & LL_I2C_SR1_ADDR) {
-                    (void)st->i2c_reg_base->SR2;  // Clear ADDR flag
-                    
-                    // Start sending data bytes
-                    st->state = STATE_MSTR_WR_SENDING_DATA;
+        case STATE_MSTR_WR_SENDING_ADDR:
+            // Slave ACKed the address?
+            if (sr1 & LL_I2C_SR1_ADDR) {
+                (void)st->i2c_reg_base->SR2;  // Clear ADDR flag
+                
+                // Start sending data bytes
+                st->state = STATE_MSTR_WR_SENDING_DATA;
+                st->i2c_reg_base->DR = st->msg_bfr[st->msg_bytes_xferred++];
+            }
+            break;
+
+        case STATE_MSTR_WR_SENDING_DATA:
+            // HW ready for next byte?
+            if (sr1 & (LL_I2C_SR1_TXE | LL_I2C_SR1_BTF)) {
+                
+                if (st->msg_bytes_xferred < st->msg_len) {
+                    // More bytes to send
                     st->i2c_reg_base->DR = st->msg_bfr[st->msg_bytes_xferred++];
+                    
+                } else if (sr1 & LL_I2C_SR1_BTF) {
+                    // All bytes sent → DONE! Clean up inline (no helper function)
+                    DISABLE_ALL_INTERRUPTS(st);
+                    LL_I2C_GenerateStopCondition(st->i2c_reg_base);
+                    LL_I2C_Disable(st->i2c_reg_base);
+                    st->state = STATE_IDLE;
+                    st->last_op_error = I2C_ERR_NONE;  // ← ADD THIS LINE
                 }
-                break;
+            }
+            break;
 
-            case STATE_MSTR_WR_SENDING_DATA:
-                // HW ready for next byte?
-                if (sr1 & (LL_I2C_SR1_TXE | LL_I2C_SR1_BTF)) {
-                    
-                    if (st->msg_bytes_xferred < st->msg_len) {
-                        // More bytes to send
-                        st->i2c_reg_base->DR = st->msg_bfr[st->msg_bytes_xferred++];
-                        
-                    } else if (sr1 & LL_I2C_SR1_BTF) {
-                        // All bytes sent → DONE! Clean up inline (no helper function)
-                        DISABLE_ALL_INTERRUPTS(st);
-                        LL_I2C_GenerateStopCondition(st->i2c_reg_base);
-                        LL_I2C_Disable(st->i2c_reg_base);
-                        if (st->guard_tmr_id >= 0)
-                            tmr_inst_start(st->guard_tmr_id, 0);
-                        st->state = STATE_IDLE;
-                        st->last_op_error = I2C_ERR_NONE;  // ← ADD THIS LINE
-                    }
+        // ===== READ SEQUENCE: 3 States =====
+        
+        case STATE_MSTR_RD_GEN_START:
+            // HW sent START?
+            if (sr1 & LL_I2C_SR1_SB) {
+                // Send 7-bit address + R bit (1)
+                st->i2c_reg_base->DR = (st->dest_addr << 1) | 1;
+                st->state = STATE_MSTR_RD_SENDING_ADDR;
+            }
+            break;
+
+        case STATE_MSTR_RD_SENDING_ADDR:
+            // Slave ACKed the address?
+            if (sr1 & LL_I2C_SR1_ADDR) {
+                // Set ACK/NACK mode
+                if (st->msg_len == 1) {
+                    LL_I2C_AcknowledgeNextData(st->i2c_reg_base, LL_I2C_NACK);
+                } else {
+                    LL_I2C_AcknowledgeNextData(st->i2c_reg_base, LL_I2C_ACK);
                 }
-                break;
-
-            // ===== READ SEQUENCE: 3 States =====
-            
-            case STATE_MSTR_RD_GEN_START:
-                // HW sent START?
-                if (sr1 & LL_I2C_SR1_SB) {
-                    // Send 7-bit address + R bit (1)
-                    st->i2c_reg_base->DR = (st->dest_addr << 1) | 1;
-                    st->state = STATE_MSTR_RD_SENDING_ADDR;
+                
+                (void)st->i2c_reg_base->SR2;  // Clear ADDR flag
+                
+                // For single byte: generate STOP early
+                if (st->msg_len == 1) {
+                    LL_I2C_GenerateStopCondition(st->i2c_reg_base);
                 }
-                break;
+                
+                st->state = STATE_MSTR_RD_READING_DATA;
+            }
+            break;
 
-            case STATE_MSTR_RD_SENDING_ADDR:
-                // Slave ACKed the address?
-                if (sr1 & LL_I2C_SR1_ADDR) {
-                    // Set ACK/NACK mode
-                    if (st->msg_len == 1) {
-                        LL_I2C_AcknowledgeNextData(st->i2c_reg_base, LL_I2C_NACK);
-                    } else {
-                        LL_I2C_AcknowledgeNextData(st->i2c_reg_base, LL_I2C_ACK);
-                    }
-                    
-                    (void)st->i2c_reg_base->SR2;  // Clear ADDR flag
-                    
-                    // For single byte: generate STOP early
-                    if (st->msg_len == 1) {
-                        LL_I2C_GenerateStopCondition(st->i2c_reg_base);
-                    }
-                    
-                    st->state = STATE_MSTR_RD_READING_DATA;
-                }
-                break;
-
-            case STATE_MSTR_RD_READING_DATA:
-                // HW received data?
-                if (sr1 & LL_I2C_SR1_RXNE) {
-                    // Read byte from DR register
-                    st->msg_bfr[st->msg_bytes_xferred++] = st->i2c_reg_base->DR;
-                    
-                    if (st->msg_bytes_xferred >= st->msg_len) {
-                        // All bytes received → DONE! Clean up inline (no helper function)
-                        DISABLE_ALL_INTERRUPTS(st);
-                        if (st->msg_len > 1) {  // STOP already sent for single byte
-                            LL_I2C_GenerateStopCondition(st->i2c_reg_base);
-                        }
-                        LL_I2C_Disable(st->i2c_reg_base);
-                        if (st->guard_tmr_id >= 0)
-                            tmr_inst_start(st->guard_tmr_id, 0);
-                        st->state = STATE_IDLE;
-                        st->last_op_error = I2C_ERR_NONE;  // ← ADD THIS LINE
-                        
-                    } else if (st->msg_bytes_xferred == st->msg_len - 1) {
-                        // Next byte is the last one → NACK it and send STOP
-                        LL_I2C_AcknowledgeNextData(st->i2c_reg_base, LL_I2C_NACK);
+        case STATE_MSTR_RD_READING_DATA:
+            // HW received data?
+            if (sr1 & LL_I2C_SR1_RXNE) {
+                // Read byte from DR register
+                st->msg_bfr[st->msg_bytes_xferred++] = st->i2c_reg_base->DR;
+                
+                if (st->msg_bytes_xferred >= st->msg_len) {
+                    // All bytes received → DONE! Clean up inline (no helper function)
+                    DISABLE_ALL_INTERRUPTS(st);
+                    if (st->msg_len > 1) {  // STOP already sent for single byte
                         LL_I2C_GenerateStopCondition(st->i2c_reg_base);
                     }
+                    LL_I2C_Disable(st->i2c_reg_base);
+                    st->state = STATE_IDLE;
+                    st->last_op_error = I2C_ERR_NONE;  // ← ADD THIS LINE
+                    
+                } else if (st->msg_bytes_xferred == st->msg_len - 1) {
+                    // Next byte is the last one → NACK it and send STOP
+                    LL_I2C_AcknowledgeNextData(st->i2c_reg_base, LL_I2C_NACK);
+                    LL_I2C_GenerateStopCondition(st->i2c_reg_base);
                 }
-                break;
+            }
+            break;
 
-            default:
-                break;
-        }
-    } else if (inter_type == INTER_TYPE_ERR) {
-        // Classify the error
-        enum i2c_errors i2c_error;
-        
-        if (sr1 & I2C_SR1_AF)
-            i2c_error = I2C_ERR_ACK_FAIL;  // Slave didn't ACK
-        else if (sr1 & I2C_SR1_BERR)
-            i2c_error = I2C_ERR_BUS_ERR;   // Bus error
-        else
-            i2c_error = I2C_ERR_INTR_UNEXPECT;  // Unknown
-        
-        // Clear error flags (required by hardware!)
-        st->i2c_reg_base->SR1 &= ~(sr1 & INTERRUPT_ERR_MASK);
-
-        
-        // Abort operation and clean up
-        op_stop_fail(st, i2c_error);
-        return;
+        default:
+            break;
     }
-}
-
-static enum tmr_cb_action tmr_callback(int32_t tmr_id, uint32_t user_data)
-{
-    (void)tmr_id;
-
-    enum i2c_instance_id instance_id = (enum i2c_instance_id)user_data;
-
-    if (instance_id >= I2C_NUM_INSTANCES)
-        return TMR_CB_NONE;
-
-    struct i2c_state* st = &i2c_states[instance_id];
-
-    if (st->state != STATE_IDLE)
-        op_stop_fail(st, I2C_ERR_GUARD_TMR);
-
-    return TMR_CB_NONE;
 }
 
 /*
