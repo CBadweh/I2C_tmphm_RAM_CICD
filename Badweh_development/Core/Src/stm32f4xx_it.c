@@ -23,8 +23,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "tmr.h"
-// Fault module exception handler
-extern void fault_exception_handler(uint32_t sp);
+// Fault module exception handler - REMOVED (fault module not needed)
+// extern void fault_exception_handler(uint32_t sp);
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -87,11 +87,11 @@ void NMI_Handler(void)
 void HardFault_Handler(void)
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
-  // Call fault module's exception handler
+  // Call fault module's exception handler - REMOVED (fault module not needed)
   // Flash is disabled, so safe from recursive loops
-  uint32_t saved_sp;
-  __ASM volatile("mov %0, sp" : "=r" (saved_sp));
-  fault_exception_handler(saved_sp);
+  // uint32_t saved_sp;
+  // __ASM volatile("mov %0, sp" : "=r" (saved_sp));
+  // fault_exception_handler(saved_sp);
   /* USER CODE END HardFault_IRQn 0 */
   while (1)
   {

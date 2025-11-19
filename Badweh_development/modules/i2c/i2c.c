@@ -1,16 +1,9 @@
 /*
- * HAPPY PATH I2C DRIVER - Maximum Simplicity Version
- * 
- * ALL ABSTRACTIONS REMOVED - Every step is explicit and visible:
- * - No helper functions (start_op, op_stop_success)
- * - No error handling
- * - All code inlined for direct, linear reading
- * 
- * LEARNING PATH:
- * 1. Reserve/Release (resource sharing)
- * 2. Write/Read APIs (see entire flow in one place)
- * 3. State machine (7 states)
- * 4. Interrupt handler (drives state transitions, see cleanup inline)
+ * @brief I2C bus driver implementation with error detection
+ *
+ * Simplified I2C driver for STM32F401RE with explicit state machine.
+ * Supports reserve/release resource management, write/read operations,
+ * and automated error detection. All state transitions driven by interrupts.
  */
 
 #include <stdint.h>
@@ -23,6 +16,8 @@
 
 #include "tmr.h"
 #include "console.h"
+#include "cmd.h"
+#include "module.h"
 #include "i2c.h"
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -97,7 +92,11 @@ struct i2c_state {
 
 static void i2c_interrupt(enum i2c_instance_id instance_id,
                           enum interrupt_type inter_type);
+<<<<<<< HEAD
 static enum tmr_cb_action tmr_callback(int32_t tmr_id, uint32_t user_data);
+=======
+static int32_t cmd_i2c_test(int32_t argc, const char** argv);
+>>>>>>> refactor-to-note
 
 ////////////////////////////////////////////////////////////////////////////////
 // PRIVATE VARIABLES
@@ -105,12 +104,39 @@ static enum tmr_cb_action tmr_callback(int32_t tmr_id, uint32_t user_data);
 
 static struct i2c_state i2c_states[I2C_NUM_INSTANCES];
 
+// Auto test state tracking
+static bool auto_test_active = false;
+
+// Command registration
+static struct cmd_cmd_info cmds[] = {
+    {
+        .name = "test",
+        .func = cmd_i2c_test,
+        .help = "Run test, usage: i2c test [auto|not_reserved] (enter no args for help)",
+    },
+};
+
+static struct cmd_client_info cmd_info = {
+    .name = "i2c",
+    .num_cmds = ARRAY_SIZE(cmds),
+    .cmds = cmds,
+    .log_level_ptr = NULL,  // No log level support
+    .num_u16_pms = 0,
+    .u16_pms = NULL,
+    .u16_pm_names = NULL,
+};
+
 ////////////////////////////////////////////////////////////////////////////////
 // PUBLIC API FUNCTIONS
 ////////////////////////////////////////////////////////////////////////////////
 
 /*
- * Get default configuration
+ * @brief Get default I2C configuration
+ *
+ * @param[in] instance_id I2C instance identifier
+ * @param[out] cfg Configuration structure to populate with defaults
+ *
+ * @return 0 for success, else a "MOD_ERR" value. See code for details.
  */
 int32_t i2c_get_def_cfg(enum i2c_instance_id instance_id, struct i2c_cfg* cfg)
 {
@@ -119,7 +145,14 @@ int32_t i2c_get_def_cfg(enum i2c_instance_id instance_id, struct i2c_cfg* cfg)
 }
 
 /*
- * Initialize I2C instance - Called once at startup
+ * @brief Initialize I2C instance
+ *
+ * @param[in] instance_id I2C instance identifier
+ * @param[in] cfg Configuration structure with timing parameters
+ *
+ * @return 0 for success, else a "MOD_ERR" value. See code for details.
+ *
+ * @note Must be called before i2c_start(). Called once at system startup.
  */
 int32_t i2c_init(enum i2c_instance_id instance_id, struct i2c_cfg* cfg)
 {
@@ -133,11 +166,18 @@ int32_t i2c_init(enum i2c_instance_id instance_id, struct i2c_cfg* cfg)
 }
 
 /*
- * Start I2C instance - Enable interrupts
+ * @brief Start I2C instance and enable interrupts
+ *
+ * @param[in] instance_id I2C instance identifier
+ *
+ * @return 0 for success, else a "MOD_ERR" value. See code for details.
+ *
+ * @note Must be called after i2c_init(). Enables NVIC interrupts and registers console commands.
  */
 int32_t i2c_start(enum i2c_instance_id instance_id)
 {
     struct i2c_state* st = &i2c_states[instance_id];
+    int32_t result;
 
     // Get a timer (for structure, not used in happy path)
     st->guard_tmr_id = tmr_inst_get_cb(0, tmr_callback, (uint32_t)instance_id);
@@ -155,24 +195,52 @@ int32_t i2c_start(enum i2c_instance_id instance_id)
     NVIC_SetPriority(I2C3_ER_IRQn, NVIC_EncodePriority(NVIC_GetPriorityGrouping(),0, 0));
     NVIC_EnableIRQ(I2C3_ER_IRQn);
 
+    // Register commands
+    result = cmd_register(&cmd_info);
+    if (result < 0) {
+        return MOD_ERR_RESOURCE;
+    }
+
     return 0;
 }
 
 /*
- * Run function - Does nothing
+ * @brief Run I2C module state machine
+ *
+ * Polls automated test state machine if active. Called continuously from super loop.
+ *
+ * @param[in] instance_id I2C instance identifier
+ *
+ * @return 0 for success, else a "MOD_ERR" value. See code for details.
  */
 int32_t i2c_run(enum i2c_instance_id instance_id)
 {
+    if (auto_test_active) {
+        int32_t rc = i2c_run_auto_test();
+        if (rc > 0) {
+            // Test completed
+            auto_test_active = false;
+            printc(">> I2C auto test completed\n\n");
+        } else if (rc < 0) {
+            // Test failed
+            auto_test_active = false;
+            printc(">> I2C auto test failed\n\n");
+        }
+        // If rc == 0, test is still in progress, continue polling
+    }
     return 0;
 }
 
 /*
- * RESERVE BUS - Get exclusive access
+ * @brief Reserve I2C bus for exclusive access
+ *
+ * @param[in] instance_id I2C instance identifier
+ *
+ * @return 0 for success, else a "MOD_ERR" value. See code for details.
+ *
+ * @note Must be called before i2c_write() or i2c_read(). Prevents other modules from using the bus.
  */
-/*
- * RESERVE BUS - Get exclusive access
- */
- int32_t i2c_reserve(enum i2c_instance_id instance_id)
+int32_t i2c_reserve(enum i2c_instance_id instance_id)
  {
      // Validate instance ID
      if (instance_id >= I2C_NUM_INSTANCES)
@@ -188,12 +256,15 @@ int32_t i2c_run(enum i2c_instance_id instance_id)
      return 0;  // Success
  }
 /*
- * RELEASE BUS - Free for others to use
+ * @brief Release I2C bus for other modules to use
+ *
+ * @param[in] instance_id I2C instance identifier
+ *
+ * @return 0 for success, else a "MOD_ERR" value. See code for details.
+ *
+ * @note Must be called after operation completes. Call i2c_get_op_status() first to verify completion.
  */
-/*
- * RELEASE BUS - Free for others to use
- */
- int32_t i2c_release(enum i2c_instance_id instance_id)
+int32_t i2c_release(enum i2c_instance_id instance_id)
  {
      // Validate instance ID
      if (instance_id >= I2C_NUM_INSTANCES)
@@ -210,18 +281,20 @@ int32_t i2c_run(enum i2c_instance_id instance_id)
  }
 
 /*
- * WRITE - Start write operation (NO HELPER FUNCTIONS - all inline)
- * 
- * You can read the ENTIRE write setup in one place:
- * 1. Save parameters (address, buffer, length)
- * 2. Set state to WR_GEN_START
- * 3. Enable peripheral
- * 4. Generate START
- * 5. Enable interrupts
- * 
- * Then the interrupt handler takes over (see i2c_interrupt below)
+ * @brief Start I2C write operation
+ *
+ * Initiates asynchronous write transaction. Operation completes in interrupt handler.
+ * Poll i2c_get_op_status() to check completion.
+ *
+ * @param[in] instance_id I2C instance identifier
+ * @param[in] dest_addr 7-bit slave device address
+ * @param[in] msg_bfr Buffer containing data to write
+ * @param[in] msg_len Number of bytes to write
+ *
+ * @return 0 for success, else a "MOD_ERR" value. See code for details.
+ *
+ * @note Bus must be reserved with i2c_reserve() before calling. Driver must be in IDLE state.
  */
-
 int32_t i2c_write(enum i2c_instance_id instance_id, uint32_t dest_addr, 
     uint8_t* msg_bfr, uint32_t msg_len){
 // Validate instance ID
@@ -265,7 +338,19 @@ return 0;  // Success - operation started
 }
 
 /*
- * READ - Start read operation
+ * @brief Start I2C read operation
+ *
+ * Initiates asynchronous read transaction. Operation completes in interrupt handler.
+ * Poll i2c_get_op_status() to check completion.
+ *
+ * @param[in] instance_id I2C instance identifier
+ * @param[in] dest_addr 7-bit slave device address
+ * @param[out] msg_bfr Buffer to store received data
+ * @param[in] msg_len Number of bytes to read
+ *
+ * @return 0 for success, else a "MOD_ERR" value. See code for details.
+ *
+ * @note Bus must be reserved with i2c_reserve() before calling. Driver must be in IDLE state.
  */
 int32_t i2c_read(enum i2c_instance_id instance_id, uint32_t dest_addr,uint8_t* msg_bfr, uint32_t msg_len){
 // Validate instance ID
@@ -309,16 +394,15 @@ return 0;  // Success - operation started
 }
 
 /*
- * GET STATUS - Poll this to check if operation complete
- * Returns: 0 = success, MOD_ERR_OP_IN_PROG = still working, MOD_ERR_BAD_INSTANCE = failed, -1 = failed
- *          use i2c_get_error() for details
- *          use i2c_release() to release the bus
- *          use i2c_run_auto_test() to run the automated test
- *          use i2c_get_error() to get the error code
- *          use i2c_release() to release the bus
- *          use i2c_run_auto_test() to run the automated test
- *          use i2c_get_error() to get the error code
- *          use i2c_release() to release the bus
+ * @brief Get status of current I2C operation
+ *
+ * @param[in] instance_id I2C instance identifier
+ *
+ * @return 0 for success, MOD_ERR_OP_IN_PROG if operation still in progress,
+ *         -1 if operation failed, else a "MOD_ERR" value. See code for details.
+ *
+ * @note If operation failed, call i2c_get_error() for detailed error code.
+ *       After successful completion, call i2c_release() to free the bus.
  */
 int32_t i2c_get_op_status(enum i2c_instance_id instance_id)
 {
@@ -361,8 +445,13 @@ static void op_stop_fail(struct i2c_state* st, enum i2c_errors error)
 
 
 /*
- * GET ERROR - Get detailed error code after operation fails
- * Call this when i2c_get_op_status() returns error
+ * @brief Get detailed error code from last failed operation
+ *
+ * @param[in] instance_id I2C instance identifier
+ *
+ * @return Error code from enum i2c_errors, or I2C_ERR_INVALID_INSTANCE if instance invalid
+ *
+ * @note Call this after i2c_get_op_status() returns -1 to get specific failure reason.
  */
 enum i2c_errors i2c_get_error(enum i2c_instance_id instance_id)
 {
@@ -544,7 +633,16 @@ static enum tmr_cb_action tmr_callback(int32_t tmr_id, uint32_t user_data)
 }
 
 /*
- * AUTOMATED TEST - Run button-triggered I2C test sequence
+ * @brief Run automated I2C test sequence
+ *
+ * State machine that performs: reserve → write → read → release.
+ * Tests communication with SHT31-D sensor at address 0x44.
+ *
+ * @return 1 if test completed successfully, 0 if test still in progress,
+ *         negative value if test failed, else a "MOD_ERR" value. See code for details.
+ *
+ * @note Call repeatedly from super loop until return value is non-zero.
+ *       Positive return indicates completion, negative indicates failure.
  */
 int32_t i2c_run_auto_test(void)
 {
@@ -595,7 +693,11 @@ int32_t i2c_run_auto_test(void)
             msg_len = 6;  // temp(2) + CRC + hum(2) + CRC
             rc = i2c_read(instance_id, 0x44, msg_bfr, msg_len);
             if (rc != 0){
+<<<<<<< HEAD
                 printc("Read start failed: %ld\n", (long)rc);
+=======
+                printc("Read start failed: %d\n", (int)rc);
+>>>>>>> refactor-to-note
                 i2c_release(instance_id);
                 test_state = 0;
                 return rc;
@@ -620,7 +722,11 @@ int32_t i2c_run_auto_test(void)
         case 5:  // Release the bus
             rc = i2c_release(instance_id);
             if (rc != 0) {
+<<<<<<< HEAD
                 printc("I2C_RELEASE_FAIL: %ld\n", (long)rc);
+=======
+                printc("I2C_RELEASE_FAIL: %d\n", (int)rc);
+>>>>>>> refactor-to-note
                 return rc;
             }
             test_state = 0;  // Reset for next test
@@ -629,5 +735,138 @@ int32_t i2c_run_auto_test(void)
         default:
             test_state = 0;
             return 1;
+    }
+}
+
+/*
+ * @brief Test error detection for "not reserved" condition
+ *
+ * Verifies that i2c_write() and i2c_read() correctly return MOD_ERR_NOT_RESERVED
+ * when called without first reserving the bus. Also verifies proper sequence still works.
+ *
+ * @return 1 if all tests passed, else 1 if any test failed
+ */
+int32_t i2c_test_not_reserved(void)
+{
+    enum i2c_instance_id instance_id = I2C_INSTANCE_3;
+    uint8_t test_buffer[2] = {0x2c, 0x06};
+    int32_t rc;
+
+    printc("\n========================================\n");
+    printc("  TEST: Not Reserved Error Detection\n");
+    printc("========================================\n");
+
+    // Test 1: Try to write WITHOUT reserving first
+    printc("\n[TEST 1] Calling i2c_write() WITHOUT i2c_reserve()...\n");
+    rc = i2c_write(instance_id, 0x44, test_buffer, 2);
+
+    if (rc == MOD_ERR_NOT_RESERVED) {
+        printc("  ✓ PASS: Correctly returned MOD_ERR_NOT_RESERVED (%d)\n", (int)rc);
+    } else {
+        printc("  ✗ FAIL: Expected MOD_ERR_NOT_RESERVED, got %d\n", (int)rc);
+        return 1;  // Test failed
+    }
+
+    // Test 2: Try to read WITHOUT reserving first
+    printc("\n[TEST 2] Calling i2c_read() WITHOUT i2c_reserve()...\n");
+    rc = i2c_read(instance_id, 0x44, test_buffer, 2);
+
+    if (rc == MOD_ERR_NOT_RESERVED) {
+        printc("  ✓ PASS: Correctly returned MOD_ERR_NOT_RESERVED (%d)\n", (int)rc);
+    } else {
+        printc("  ✗ FAIL: Expected MOD_ERR_NOT_RESERVED, got %d\n", (int)rc);
+        return 1;  // Test failed
+    }
+
+    // Test 3: Verify that proper sequence still works
+    printc("\n[TEST 3] Verifying proper sequence (reserve → write) still works...\n");
+    rc = i2c_reserve(instance_id);
+    if (rc != 0) {
+        printc("  ✗ FAIL: i2c_reserve() failed: %d\n", (int)rc);
+        return 1;
+    }
+
+    rc = i2c_write(instance_id, 0x44, test_buffer, 2);
+    if (rc == 0) {
+        printc("  ✓ PASS: Proper sequence works (reserved → write succeeded)\n");
+        // Clean up: release the bus
+        i2c_release(instance_id);
+    } else {
+        printc("  ✗ FAIL: Write failed after reserve: %d\n", (int)rc);
+        i2c_release(instance_id);
+        return 1;
+    }
+
+    printc("\n========================================\n");
+    printc("  All tests passed!\n");
+    printc("========================================\n\n");
+
+    return 1;  // All tests passed
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// COMMAND HANDLERS
+////////////////////////////////////////////////////////////////////////////////
+
+/*
+ * Command handler for "i2c test" command
+ */
+static int32_t cmd_i2c_test(int32_t argc, const char** argv)
+{
+    // Handle help case (just "i2c test" with no arguments)
+    if (argc == 2) {
+        printc("Test operations:\n"
+               "  Run auto test: i2c test auto\n"
+               "  Test not reserved: i2c test not_reserved\n");
+        return 0;
+    }
+    
+    if (argc < 3) {
+        printc("Insufficient arguments\n");
+        return MOD_ERR_BAD_CMD;
+    }
+    
+    // Case-insensitive comparison (simple implementation)
+    const char* op = argv[2];
+    int match_auto = 0;
+    int match_not_reserved = 0;
+    
+    // Simple case-insensitive comparison
+    if ((op[0] == 'a' || op[0] == 'A') &&
+        (op[1] == 'u' || op[1] == 'U') &&
+        (op[2] == 't' || op[2] == 'T') &&
+        (op[3] == 'o' || op[3] == 'O') &&
+        op[4] == '\0') {
+        match_auto = 1;
+    } else if ((op[0] == 'n' || op[0] == 'N') &&
+               (op[1] == 'o' || op[1] == 'O') &&
+               (op[2] == 't' || op[2] == 'T') &&
+               op[3] == '_' &&
+               (op[4] == 'r' || op[4] == 'R') &&
+               (op[5] == 'e' || op[5] == 'E') &&
+               (op[6] == 's' || op[6] == 'S') &&
+               (op[7] == 'e' || op[7] == 'E') &&
+               (op[8] == 'r' || op[8] == 'R') &&
+               (op[9] == 'v' || op[9] == 'V') &&
+               (op[10] == 'e' || op[10] == 'E') &&
+               (op[11] == 'd' || op[11] == 'D') &&
+               op[12] == '\0') {
+        match_not_reserved = 1;
+    }
+    
+    if (match_auto) {
+        // Start auto test
+        auto_test_active = true;
+        printc("\n>> Starting I2C auto test...\n");
+        // Call once to start the state machine
+        i2c_run_auto_test();
+        return 0;
+    } else if (match_not_reserved) {
+        // Run not_reserved test immediately (it's synchronous)
+        return i2c_test_not_reserved();
+    } else {
+        printc("Unknown test operation '%s'\n", op);
+        printc("Valid operations: auto, not_reserved\n");
+        return MOD_ERR_BAD_CMD;
     }
 }

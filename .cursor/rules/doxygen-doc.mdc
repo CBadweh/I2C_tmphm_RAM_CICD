@@ -1,0 +1,168 @@
+---
+alwaysApply: false
+---
+# Doxygen Documentation Rule (Phased Approach)
+
+## Rule Priority
+
+Apply this rule to C/C++ code files in embedded systems projects, following a phased approach that matches reference code style.
+
+## Comment Style
+
+Use C-style comments (`/* */`) with Doxygen tags, not Doxygen-style (`/** */`). This matches the reference codebase style.
+
+## Phase 1: File Headers (Start Here)
+
+Every `.c`, `.cpp`, `.h`, and `.hpp` file should have a minimal header:
+
+```c
+/*
+ * @brief One-line description of file purpose
+ *
+ * Optional: Additional description paragraph if needed.
+ */
+```
+
+**Guidelines:**
+
+- Keep it concise (30 seconds per file)
+- Builds consistent habit
+- Matches reference code style
+
+## Phase 2: Public Functions (High Priority)
+
+Document ALL public API functions (functions declared in `.h` files):
+
+```c
+/*
+ * @brief Brief description of what function does
+ *
+ * @param[in] instance_id Identifies the module instance
+ * @param[in] cfg Configuration structure
+ * @param[out] result Pointer to store output data
+ *
+ * @return 0 for success, else a "MOD_ERR" value. See code for details.
+ */
+int32_t module_function(enum module_instance_id instance_id, 
+                        struct module_cfg* cfg, 
+                        uint32_t* result);
+```
+
+**Parameters to document:**
+
+- `@param[in]` - Input only parameters
+- `@param[out]` - Output only (pointer that gets written)
+- `@param[in,out]` - Both input and output parameters
+- `@return` - Return value description (0 = success, negative = error code)
+
+**What to document:**
+
+- All functions declared in public headers (`.h` files)
+- Functions used by other modules
+- Hardware interface functions (I2C, SPI, UART)
+
+**What to skip (for now):**
+
+- Private/internal functions (static functions in `.c` files)
+- Simple helper functions with obvious behavior
+
+## Phase 3: Add as Needed (Optional Enhancements)
+
+Add these tags when they add value:
+
+**`@note`** - Important usage notes or preconditions:
+
+```c
+ * @note Sensor must be initialized with module_init() before calling
+```
+
+**`@warning`** - Critical safety/usage warnings:
+
+```c
+ * @warning Function blocks for ~15ms during measurement
+```
+
+**Inline comments** - For hardware quirks and non-obvious logic:
+
+```c
+// Hardware quirk: Must delay 10us after setting register
+// Timing constraint: Must be called from interrupt context
+```
+
+## What to Skip (For Now)
+
+These are NOT required and not used in reference code:
+
+- `@file`, `@author`, `@date` tags in file headers
+- `/**<` inline comments for struct/enum members
+- Full struct documentation (rely on clear field names)
+- CI/CD integration
+- Macro documentation (unless truly non-obvious)
+
+## Style Preferences
+
+- Use `/*` (C-style), not `/**` (Doxygen-style) to match reference code
+- Use `@brief` for one-line summaries
+- Use `@param` with direction tags `[in]`, `[out]`, `[in,out]`
+- Use `@return` for return value description
+- Keep descriptions concise but complete
+- Use imperative mood: "Initializes module" not "This function initializes"
+
+## Example: Complete Function Documentation
+
+```c
+/*
+ * @brief Implementation of tmphm module.
+ *
+ * This module provides temperature and humidity measurement using I2C.
+ */
+
+#include "tmphm.h"
+
+/*
+ * @brief Initialize tmphm module instance.
+ *
+ * @param[in] instance_id Identifies the sensor instance.
+ * @param[in] cfg Configuration structure with sensor parameters.
+ *
+ * @return 0 for success, else a "MOD_ERR" value. See code for details.
+ *
+ * @note Sensor must be initialized before calling tmphm_start()
+ */
+int32_t tmphm_init(enum tmphm_instance_id instance_id, struct tmphm_cfg* cfg)
+{
+    // Implementation here
+}
+```
+
+## Documentation Triggers
+
+Auto-suggest documentation when:
+
+1. Creating a new file (add Phase 1 header)
+2. Writing a public API function (add Phase 2 documentation)
+3. Writing a function that returns error codes
+4. Writing hardware interface functions (I2C, SPI, UART)
+
+## Quick Reference
+
+| Element | Tag | Example |
+|---------|-----|---------|
+| Brief | `@brief` | `@brief Initializes module` |
+| Input param | `@param[in]` | `@param[in] id Instance ID` |
+| Output param | `@param[out]` | `@param[out] data Data buffer` |
+| Return | `@return` | `@return 0 on success` |
+| Note | `@note` | `@note Thread-safe` |
+| Warning | `@warning` | `@warning Blocks for 10ms` |
+
+## Remember: Phased Approach
+
+**Phase 1:** Build habit with minimal file headers
+
+**Phase 2:** Document public APIs (80% of value)
+
+**Phase 3:** Add `@note`/`@warning` only when needed
+
+Start with Phase 1 and 2. This matches your reference code style and gives most benefit with minimal overhead. Add Phase 3 items only when they provide real value.
+
+**Perfection is not required—clarity is.**

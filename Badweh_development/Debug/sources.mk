@@ -19,7 +19,6 @@ MAP_FILES :=
 S_DEPS := 
 S_UPPER_DEPS := 
 C_DEPS := 
-OBJCOPY_BIN := 
 
 # Every subdirectory with source files must be described here
 SUBDIRS := \
@@ -27,20 +26,11 @@ Core/Src \
 Core/Startup \
 Drivers/STM32F4xx_HAL_Driver/Src \
 app1 \
-modules/blinky \
 modules/cmd \
 modules/console \
-modules/dio \
-modules/fault \
-modules/flash \
-modules/gps_gtu7 \
 modules/i2c \
 modules/log \
-modules/lwl \
-modules/mem \
-modules/stat \
 modules/tmphm \
 modules/tmr \
 modules/ttys \
-modules/wdg \
 
