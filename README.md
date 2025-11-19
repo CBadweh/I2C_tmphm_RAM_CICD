@@ -1,13 +1,45 @@
-# I2C Temperature/Humidity Monitor
+# Bare-Metal I2C Temperature/Humidity Monitor
+## Production-Quality Embedded Systems Project
 
-Temperature and humidity monitor using SHT31-D sensor on STM32F401RE.
+A professional bare-metal embedded systems project demonstrating interrupt-driven I2C communication, state machine design, and comprehensive error handling on the STM32F401RE microcontroller with SHT31-D sensor.
+
+**Portfolio Highlights:**
+- 🔧 Custom interrupt-driven I2C driver with 7-state FSM
+- 🛡️ Comprehensive error detection and recovery
+- 🧪 Professional fault injection testing framework
+- 📊 Real-time temperature/humidity monitoring
+- 🔄 Non-blocking super-loop architecture
+- 📝 Extensive documentation and learning materials
+
+---
+
+## 🎯 Project Overview
+
+This project implements a production-quality temperature and humidity monitoring system using professional embedded systems patterns:
+
+- **Bare-metal development** (no RTOS) with super-loop architecture
+- **Interrupt-driven I2C state machine** for non-blocking communication
+- **Professional error handling** with guard timers and fault detection
+- **Comprehensive testing infrastructure** including fault injection
+- **Modular design** with clear separation of concerns
+- **CI/CD ready** with automated build and test scripts
+
+### Key Technical Achievements
+
+✅ **Custom I2C Driver**: 7-state interrupt-driven FSM handling master read/write operations  
+✅ **Error Recovery**: Robust timeout protection, bus error detection, and automatic recovery  
+✅ **Sensor Integration**: SHT31-D with CRC-8 validation and integer-only math  
+✅ **Fault Injection**: Professional testing framework for automated error path validation  
+✅ **Performance Monitoring**: Diagnostic counters and console commands for debugging  
+✅ **Zero-overhead Release Builds**: Debug-only instrumentation, production code stays lean
 
 ## Hardware
 
-- **MCU**: STM32F401RE (Nucleo board)
-- **Sensor**: SHT31-D (temperature & humidity sensor from Adafruit)
-- **Communication**: I2C3, UART2
-- **Power**: 5V USB (via Nucleo board), 3.3V regulated, ~50mA typical
+- **MCU**: STM32F401RE (Nucleo-64 board)
+- **Sensor**: SHT31-D temperature & humidity sensor (Adafruit)
+- **Communication**: I2C3 (100 kHz), UART2 (115200 baud)
+- **Power**: 5V USB via Nucleo board, 3.3V regulated
+- **Memory**: 41 KB Flash used, minimal RAM footprint
 
 ## Quick Start
 
@@ -134,13 +166,150 @@ For complete documentation, see `docs/fault-injection.md`
 
 **Note:** Fault injection is only available in Debug builds. Release builds have zero testing overhead.
 
-## Documentation
+## 📁 Project Structure
 
-- Hardware pinout: `docs/pinout.md`
-- Fault injection testing: `docs/fault-injection.md`
-- Build instructions: `docs/build.md`
-- I2C driver documentation: `Badweh_Development/modules/i2c/`
-- Temperature/Humidity module: `Badweh_Development/modules/tmphm/`
+```
+gene_Baremetal_I2CTmphm_RAM_CICD/
+├── Badweh_Development/          # Main project (portfolio showcase)
+│   ├── app1/                    # Application entry point
+│   ├── modules/                 # Modular driver architecture
+│   │   ├── i2c/                 # Custom I2C driver
+│   │   ├── tmphm/               # Temperature/Humidity module
+│   │   ├── console/             # Command-line interface
+│   │   ├── cmd/                 # Command infrastructure
+│   │   ├── tmr/                 # Timer service
+│   │   └── ttys/                # Serial UART driver
+│   ├── ci-cd-tools/             # Build automation
+│   └── Core/                    # STM32 HAL/LL initialization
+├── docs/                        # Technical documentation
+│   ├── i2c_module.md            # I2C driver deep dive
+│   ├── fault-injection.md       # Testing framework guide
+│   ├── build.md                 # Build system details
+│   ├── learning/                # Learning materials & lesson plans
+│   └── reference/               # Reference documentation
+└── reference/                   # Reference implementations from coursework
+    ├── tmphm/                   # I2C/TMPHM reference code
+    ├── ram-class-nucleo-f401re/ # RAM course reference
+    └── ci-cd-class-1/           # CI/CD course reference
+```
+
+## 🛠️ Technologies & Tools
+
+**Embedded Systems:**
+- ARM Cortex-M4 microcontroller (STM32F401RE)
+- Bare-metal C programming (no RTOS)
+- STM32 Low-Level (LL) drivers for I2C
+- Interrupt-driven architecture
+- State machine design patterns
+
+**Communication Protocols:**
+- I2C (Inter-Integrated Circuit) master mode
+- UART for console interface
+- CRC-8 error detection
+
+**Development Tools:**
+- STM32CubeIDE (ARM GCC toolchain)
+- ST-Link debugger/programmer
+- Git version control
+- Make build system
+- Custom CI/CD scripts
+
+**Testing & Quality:**
+- Fault injection framework
+- Static code analysis (cppcheck)
+- Console-based diagnostics
+- Performance monitoring
+
+## 📚 Documentation
+
+**Main Project:**
+- [Hardware Pinout](docs/pinout.md) - Pin connections and I2C addresses
+- [Fault Injection Guide](docs/fault-injection.md) - Testing framework documentation
+- [Build System](docs/build.md) - Detailed build instructions
+- [I2C Driver Deep Dive](docs/i2c_module.md) - Complete I2C implementation guide
+- [Module Documentation](Badweh_Development/modules/) - Per-module README files
+
+**Learning Materials:**
+- [Lesson Plan](docs/learning/i2ctmphm_ram_cicd_lesson_plan.md) - Week-long learning progression
+- [Progressive Reconstruction](docs/learning/Progressive_Reconstruction.md) - "Happy path first" approach
+- [Day Summaries](docs/learning/) - Daily progress and lessons learned
+
+**Reference Code:**
+- [Reference README](reference/README.md) - Coursework reference implementations
+
+## 🎓 Learning Journey
+
+This project was developed following Gene Schrader's professional embedded systems courses, applying industry best practices:
+
+1. **Day 1-2**: I2C driver design and interrupt-driven state machine implementation
+2. **Day 3**: TMPHM sensor module with CRC validation and integer math
+3. **Day 4**: Fault injection framework for comprehensive error testing
+4. **Day 5**: Documentation and code refinement
+
+The `reference/` directory contains complete coursework implementations that served as learning material. The main project (`Badweh_Development/`) demonstrates independent application of these patterns.
+
+## 🚀 Key Features
+
+### I2C Driver (`modules/i2c/`)
+- 7-state interrupt-driven FSM (IDLE → START → ADDR → DATA → STOP)
+- Non-blocking API design for super-loop integration
+- Guard timer protection (100ms timeout)
+- Comprehensive error detection (NACK, bus errors, arbitration loss)
+- Bus reservation system for shared resource management
+- Performance counters and diagnostic commands
+
+### TMPHM Module (`modules/tmphm/`)
+- State machine for measurement cycle
+- CRC-8 validation of sensor data
+- Integer-only temperature/humidity conversion
+- Periodic sampling via timer callbacks
+- Console commands for testing
+
+### Fault Injection Framework
+- Software-only fault simulation (no hardware changes)
+- Toggle-based control for automation
+- Zero production overhead (Debug build only)
+- Industry-standard testing approach
+
+## 🔍 Code Highlights
+
+**Interrupt-Driven State Machine:**
+```c
+// I2C event interrupt advances state machine
+void I2C3_EV_IRQHandler(void) {
+    i2c_interrupt(I2C_INSTANCE_3, INTER_TYPE_EVT, 0);
+}
+
+// State machine handles one event per interrupt
+static void i2c_interrupt(instance_id, inter_type, irq_type) {
+    switch (state) {
+        case STATE_MSTR_WR_SENDING_ADDR:
+            // ADDR flag set → start sending data
+            state = STATE_MSTR_WR_SENDING_DATA;
+            break;
+        // ... handle other states
+    }
+}
+```
+
+**Non-Blocking API Design:**
+```c
+// Initiate operation (returns immediately)
+i2c_write(I2C_INSTANCE_3, 0x44, cmd, 2);
+
+// Poll for completion in super loop
+while (i2c_get_op_status(I2C_INSTANCE_3) == MOD_ERR_OP_IN_PROG) {
+    // Continue other work
+}
+```
+
+## 📊 Performance
+
+- **Code size**: ~41 KB Flash (Debug build with instrumentation)
+- **RAM usage**: Minimal static allocation, no dynamic memory
+- **I2C speed**: 100 kHz (standard mode)
+- **Measurement rate**: 1 Hz continuous sampling
+- **Timeout protection**: 100ms guard timer per transaction
 
 ## License
 
