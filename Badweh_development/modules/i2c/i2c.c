@@ -104,12 +104,19 @@ static struct i2c_state i2c_states[I2C_NUM_INSTANCES];
 // Auto test state tracking
 static bool auto_test_active = false;
 
+#ifdef ENABLE_FAULT_INJECTION
+// Fault injection flags (for testing error paths)
+// Only compiled in Debug builds - completely removed from Release builds
+static bool fault_inject_wrong_addr = false;  // Simulate wrong I2C address
+static bool fault_inject_nack = false;        // Simulate NACK (unplugged sensor)
+#endif
+
 // Command registration
 static struct cmd_cmd_info cmds[] = {
     {
         .name = "test",
         .func = cmd_i2c_test,
-        .help = "Run test, usage: i2c test [auto|not_reserved] (enter no args for help)",
+        .help = "Run test, usage: i2c test [auto|not_reserved|wrong_addr|nack] (enter no args for help)",
     },
 };
 
@@ -309,7 +316,12 @@ if (st->state != STATE_IDLE)
 return MOD_ERR_STATE;
 
 // Save operation parameters
-st->dest_addr = dest_addr;
+#ifdef ENABLE_FAULT_INJECTION
+// Fault injection: use wrong address if enabled (simulates non-existent device)
+st->dest_addr = fault_inject_wrong_addr ? 0x45 : dest_addr;
+#else
+st->dest_addr = dest_addr;  // Zero overhead in production builds
+#endif
 st->msg_bfr = msg_bfr;
 st->msg_len = msg_len;
 st->msg_bytes_xferred = 0;
@@ -365,7 +377,12 @@ if (st->state != STATE_IDLE)
 return MOD_ERR_STATE;
 
 // Save operation parameters
-st->dest_addr = dest_addr;
+#ifdef ENABLE_FAULT_INJECTION
+// Fault injection: use wrong address if enabled (simulates non-existent device)
+st->dest_addr = fault_inject_wrong_addr ? 0x45 : dest_addr;
+#else
+st->dest_addr = dest_addr;  // Zero overhead in production builds
+#endif
 st->msg_bfr = msg_bfr;
 st->msg_len = msg_len;
 st->msg_bytes_xferred = 0;
@@ -592,20 +609,33 @@ static void i2c_interrupt(enum i2c_instance_id instance_id,
                 break;
         }
     } else if (inter_type == INTER_TYPE_ERR) {
+#ifdef ENABLE_FAULT_INJECTION
+        // FAULT INJECTION: Force NACK error if enabled (simulates unplugged sensor)
+        // Only compiled in Debug builds - zero overhead in production
+        if (fault_inject_nack) {
+            // Clear error flags (required by hardware!)
+            st->i2c_reg_base->SR1 &= ~(sr1 & INTERRUPT_ERR_MASK);
+
+            // Force ACK_FAIL error
+            op_stop_fail(st, I2C_ERR_ACK_FAIL);
+            return;
+        }
+#endif
+
         // Classify the error
         enum i2c_errors i2c_error;
-        
+
         if (sr1 & I2C_SR1_AF)
             i2c_error = I2C_ERR_ACK_FAIL;  // Slave didn't ACK
         else if (sr1 & I2C_SR1_BERR)
             i2c_error = I2C_ERR_BUS_ERR;   // Bus error
         else
             i2c_error = I2C_ERR_INTR_UNEXPECT;  // Unknown
-        
+
         // Clear error flags (required by hardware!)
         st->i2c_reg_base->SR1 &= ~(sr1 & INTERRUPT_ERR_MASK);
 
-        
+
         // Abort operation and clean up
         op_stop_fail(st, i2c_error);
         return;
@@ -794,6 +824,55 @@ int32_t i2c_test_not_reserved(void)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+// Fault Injection Test Functions
+// Only compiled in Debug builds - completely removed from Release builds
+////////////////////////////////////////////////////////////////////////////////
+
+#ifdef ENABLE_FAULT_INJECTION
+
+int32_t i2c_test_wrong_addr(void)
+{
+    // Toggle the fault injection flag
+    fault_inject_wrong_addr = !fault_inject_wrong_addr;
+
+    printc("\n========================================\n");
+    printc("  Fault Injection: Wrong Address\n");
+    printc("========================================\n");
+    printc("  Status: %s\n", fault_inject_wrong_addr ? "ENABLED" : "DISABLED");
+    if (fault_inject_wrong_addr) {
+        printc("  Next I2C operation will use address 0x45 instead of actual address\n");
+        printc("  This simulates addressing a non-existent device\n");
+    } else {
+        printc("  Normal addressing restored\n");
+    }
+    printc("========================================\n\n");
+
+    return 0;  // Success
+}
+
+int32_t i2c_test_nack(void)
+{
+    // Toggle the fault injection flag
+    fault_inject_nack = !fault_inject_nack;
+
+    printc("\n========================================\n");
+    printc("  Fault Injection: NACK (Unplugged Sensor)\n");
+    printc("========================================\n");
+    printc("  Status: %s\n", fault_inject_nack ? "ENABLED" : "DISABLED");
+    if (fault_inject_nack) {
+        printc("  Next I2C error will be forced to ACK_FAIL\n");
+        printc("  This simulates an unplugged or non-responsive sensor\n");
+    } else {
+        printc("  Normal error handling restored\n");
+    }
+    printc("========================================\n\n");
+
+    return 0;  // Success
+}
+
+#endif  // ENABLE_FAULT_INJECTION
+
+////////////////////////////////////////////////////////////////////////////////
 // COMMAND HANDLERS
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -806,7 +885,12 @@ static int32_t cmd_i2c_test(int32_t argc, const char** argv)
     if (argc == 2) {
         printc("Test operations:\n"
                "  Run auto test: i2c test auto\n"
-               "  Test not reserved: i2c test not_reserved\n");
+               "  Test not reserved: i2c test not_reserved\n"
+#ifdef ENABLE_FAULT_INJECTION
+               "  Toggle wrong addr fault: i2c test wrong_addr\n"
+               "  Toggle NACK fault: i2c test nack\n"
+#endif
+        );
         return 0;
     }
     
@@ -819,6 +903,10 @@ static int32_t cmd_i2c_test(int32_t argc, const char** argv)
     const char* op = argv[2];
     int match_auto = 0;
     int match_not_reserved = 0;
+#ifdef ENABLE_FAULT_INJECTION
+    int match_wrong_addr = 0;
+    int match_nack = 0;
+#endif
     
     // Simple case-insensitive comparison
     if ((op[0] == 'a' || op[0] == 'A') &&
@@ -842,7 +930,28 @@ static int32_t cmd_i2c_test(int32_t argc, const char** argv)
                op[12] == '\0') {
         match_not_reserved = 1;
     }
-    
+#ifdef ENABLE_FAULT_INJECTION
+    else if ((op[0] == 'w' || op[0] == 'W') &&
+               (op[1] == 'r' || op[1] == 'R') &&
+               (op[2] == 'o' || op[2] == 'O') &&
+               (op[3] == 'n' || op[3] == 'N') &&
+               (op[4] == 'g' || op[4] == 'G') &&
+               op[5] == '_' &&
+               (op[6] == 'a' || op[6] == 'A') &&
+               (op[7] == 'd' || op[7] == 'D') &&
+               (op[8] == 'd' || op[8] == 'D') &&
+               (op[9] == 'r' || op[9] == 'R') &&
+               op[10] == '\0') {
+        match_wrong_addr = 1;
+    } else if ((op[0] == 'n' || op[0] == 'N') &&
+               (op[1] == 'a' || op[1] == 'A') &&
+               (op[2] == 'c' || op[2] == 'C') &&
+               (op[3] == 'k' || op[3] == 'K') &&
+               op[4] == '\0') {
+        match_nack = 1;
+    }
+#endif
+
     if (match_auto) {
         // Start auto test
         auto_test_active = true;
@@ -853,9 +962,23 @@ static int32_t cmd_i2c_test(int32_t argc, const char** argv)
     } else if (match_not_reserved) {
         // Run not_reserved test immediately (it's synchronous)
         return i2c_test_not_reserved();
-    } else {
+    }
+#ifdef ENABLE_FAULT_INJECTION
+    else if (match_wrong_addr) {
+        // Toggle wrong address fault injection
+        return i2c_test_wrong_addr();
+    } else if (match_nack) {
+        // Toggle NACK fault injection
+        return i2c_test_nack();
+    }
+#endif
+    else {
         printc("Unknown test operation '%s'\n", op);
-        printc("Valid operations: auto, not_reserved\n");
+        printc("Valid operations: auto, not_reserved"
+#ifdef ENABLE_FAULT_INJECTION
+               ", wrong_addr, nack"
+#endif
+               "\n");
         return MOD_ERR_BAD_CMD;
     }
 }

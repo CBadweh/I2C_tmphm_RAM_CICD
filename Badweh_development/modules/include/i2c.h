@@ -38,6 +38,12 @@
 // I2C timing configuration
 #define CONFIG_I2C_DFLT_TRANS_GUARD_TIME_MS 100
 
+// Fault injection support (only enabled in Debug builds for testing)
+// In production (Release) builds, fault injection code is completely removed
+#ifdef DEBUG
+    #define ENABLE_FAULT_INJECTION
+#endif
+
 // Module error codes (subset used by I2C)
 #define MOD_ERR_ARG          -1
 #define MOD_ERR_RESOURCE     -2
@@ -96,5 +102,12 @@ enum i2c_errors i2c_get_error(enum i2c_instance_id instance_id);
 // Automated test (button-triggered)
 int32_t i2c_run_auto_test(void);
 int32_t i2c_test_not_reserved(void);
+
+#ifdef ENABLE_FAULT_INJECTION
+// Fault injection tests (for testing error paths)
+// Only available in Debug builds - removed from Release builds
+int32_t i2c_test_wrong_addr(void);
+int32_t i2c_test_nack(void);
+#endif
 
 #endif // _I2C_H_
