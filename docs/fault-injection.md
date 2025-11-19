@@ -12,6 +12,7 @@
 |---------|--------------|----------|
 | `i2c test wrong_addr` | Toggle wrong address fault | Test "device doesn't exist" error |
 | `i2c test nack` | Toggle NACK fault | Test "sensor unplugged" error |
+| `i2c test timeout` | Toggle timeout fault | Test "operation stuck" error |
 | `i2c test auto` | Run I2C test | Execute test with active faults |
 | `i2c test not_reserved` | Test without reserve | Validate state machine protection |
 
@@ -62,7 +63,21 @@
 
 ---
 
-### 3. Not Reserved Test (State Violation)
+### 3. Timeout Fault
+
+**Command:** `i2c test timeout`
+
+**What it does:** Uses 1ms timeout instead of normal guard time (100ms)
+
+**Simulates:** Stuck operation (sensor crashed, bus stuck, missing interrupt)
+
+**Expected error:** `I2C_ERR_GUARD_TMR` (guard timer expired)
+
+**Real-world scenario:** Sensor firmware crashed, bus stuck low, missing interrupt, hardware failure
+
+---
+
+### 4. Not Reserved Test (State Violation)
 
 **Command:** `i2c test not_reserved`
 
@@ -204,6 +219,48 @@
 
 ---
 
+### Test 4: Timeout Error Handling
+
+**Goal:** Verify driver detects when operations take too long
+
+**Steps:**
+1. Enable timeout fault:
+   ```
+   >> i2c test timeout
+   ```
+2. Observe output:
+   ```
+   ========================================
+     Fault Injection: Timeout
+   ========================================
+     Status: ENABLED
+     Next I2C operation will use 1ms timeout instead of 100ms
+     This simulates a stuck operation (sensor crashed, bus stuck)
+   ========================================
+   ```
+3. Run auto test:
+   ```
+   >> i2c test auto
+   ```
+4. Expected result: Test should detect `I2C_ERR_GUARD_TMR` (timeout occurred)
+5. Disable fault:
+   ```
+   >> i2c test timeout
+   ```
+6. Observe output:
+   ```
+   ========================================
+     Fault Injection: Timeout
+   ========================================
+     Status: DISABLED
+     Normal timeout restored
+   ========================================
+   ```
+
+**What you learned:** Driver correctly detects when operations take too long (stuck operations)
+
+---
+
 ## Expected Console Output
 
 ### Successful Wrong Address Test
@@ -263,11 +320,12 @@ uart.send("i2c test wrong_addr\n")   # Disable fault
 
 **Implementation:**
 - `Badweh_Development/modules/i2c/i2c.c`
-- State variables: lines 107-112
-- Wrong address injection: lines 321, 382
-- NACK injection: lines 612-623
-- Test functions: lines 831-873
-- Console commands: lines 889-892, 933-953, 966-981
+- State variables: lines 107-113
+- Wrong address injection: lines 321-326, 390-395
+- NACK injection: lines 620-631
+- Timeout injection: lines 332-341, 396-405
+- Test functions: lines 856-928
+- Console commands: lines 889-892, 933-962, 975-990
 
 ### Conditional Compilation
 
@@ -305,7 +363,24 @@ uart.send("i2c test wrong_addr\n")   # Disable fault
 #endif
 ```
 
+**Timeout Fault:**
+```c
+#ifdef ENABLE_FAULT_INJECTION
+    // Fault injection: use 1ms timeout if enabled (forces timeout before operation completes)
+    uint32_t timeout_ms = fault_inject_timeout ? 1 : st->cfg.transaction_guard_time_ms;
+    tmr_inst_start(st->guard_tmr_id, timeout_ms);
+#else
+    // Zero overhead in production builds
+    tmr_inst_start(st->guard_tmr_id, st->cfg.transaction_guard_time_ms);
+#endif
+```
+
+**When enabled:** Uses 1ms timeout instead of normal guard time (100ms)
+**When disabled:** Uses normal guard time from configuration
+**Result:** Timer expires before operation completes → `I2C_ERR_GUARD_TMR` error
+
 ---
+
 
 ## Debug vs Release Builds
 
@@ -426,6 +501,7 @@ Fault Injection Commands:
 Enable/Disable:
   i2c test wrong_addr    Toggle wrong address (0x45)
   i2c test nack          Toggle NACK fault
+  i2c test timeout       Toggle timeout fault (1ms)
 
 Execute Test:
   i2c test auto          Run I2C test with active faults

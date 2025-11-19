@@ -124,8 +124,10 @@ This project includes professional-grade fault injection capabilities for automa
 **Quick usage:**
 ```
 >> i2c test wrong_addr    # Toggle wrong address fault
+>> i2c test nack          # Toggle NACK fault
+>> i2c test timeout       # Toggle timeout fault
 >> i2c test auto          # Run test with fault active
->> i2c test wrong_addr    # Disable fault
+>> i2c test wrong_addr    # Disable fault (toggle again)
 ```
 
 For complete documentation, see `docs/fault-injection.md`

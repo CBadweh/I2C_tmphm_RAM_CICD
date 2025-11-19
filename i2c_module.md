@@ -1656,7 +1656,7 @@ This approach is used by professional embedded teams worldwide:
 
 #### New Console Commands Added
 
-Two new commands were added to the I2C test suite:
+Three new commands were added to the I2C test suite:
 
 **1. Wrong Address Fault Injection**
 ```
@@ -1672,7 +1672,14 @@ Effect:  Toggles fault injection that forces ACK_FAIL error on any I2C error
 Purpose: Simulates unplugged or non-responsive sensor
 ```
 
-Both commands use **toggle behavior**: Call once to enable, call again to disable.
+**3. Timeout Fault Injection**
+```
+Command: i2c test timeout
+Effect:  Toggles fault injection that uses 1ms timeout instead of normal guard time
+Purpose: Simulates stuck operation (sensor crashed, bus stuck)
+```
+
+All commands use **toggle behavior**: Call once to enable, call again to disable.
 
 ---
 
@@ -1734,19 +1741,48 @@ Both commands use **toggle behavior**: Call once to enable, call again to disabl
 
 ---
 
+#### Testing Timeout Error Handling
+
+**Interactive console session:**
+```
+>> i2c test timeout
+========================================
+  Fault Injection: Timeout
+========================================
+  Status: ENABLED
+  Next I2C operation will use 1ms timeout instead of 100ms
+  This simulates a stuck operation (sensor crashed, bus stuck)
+========================================
+
+>> i2c test auto
+>> Starting I2C auto test...
+[Test runs, guard timer expires after 1ms → I2C_ERR_GUARD_TMR error]
+
+>> i2c test timeout
+========================================
+  Fault Injection: Timeout
+========================================
+  Status: DISABLED
+  Normal timeout restored
+========================================
+```
+
+---
+
 ### Implementation Details
 
 #### 1. Fault Injection State Variables
 
-Added two static flags to control fault injection (i2c.c:108-109):
+Added three static flags to control fault injection (i2c.c:110-113):
 
 ```c
 // Fault injection flags (for testing error paths)
 static bool fault_inject_wrong_addr = false;  // Simulate wrong I2C address
 static bool fault_inject_nack = false;        // Simulate NACK (unplugged sensor)
+static bool fault_inject_timeout = false;     // Simulate timeout (stuck operation)
 ```
 
-**Default:** Both disabled (false) - production code runs normally.
+**Default:** All disabled (false) - production code runs normally.
 
 ---
 
@@ -1795,9 +1831,33 @@ Added fault injection at start of error handler (i2c.c:601-609):
 
 ---
 
-#### 4. Toggle Test Functions
+#### 4. Timeout Injection in i2c_write() and i2c_read()
 
-Added two new test functions similar to `i2c_test_not_reserved()` (i2c.c:804-842):
+Added fault injection to guard timer start in both functions (i2c.c:332-341, 396-405):
+
+```c
+// Arm guard timer to catch stalled transactions
+if (st->guard_tmr_id >= 0) {
+#ifdef ENABLE_FAULT_INJECTION
+    // Fault injection: use 1ms timeout if enabled (forces timeout before operation completes)
+    uint32_t timeout_ms = fault_inject_timeout ? 1 : st->cfg.transaction_guard_time_ms;
+    tmr_inst_start(st->guard_tmr_id, timeout_ms);
+#else
+    // Zero overhead in production builds
+    tmr_inst_start(st->guard_tmr_id, st->cfg.transaction_guard_time_ms);
+#endif
+}
+```
+
+**When enabled:** Uses 1ms timeout instead of normal guard time (100ms)
+**When disabled:** Uses normal guard time from configuration
+**Result:** Timer expires before operation completes → `I2C_ERR_GUARD_TMR` error
+
+---
+
+#### 5. Toggle Test Functions
+
+Added three new test functions similar to `i2c_test_not_reserved()` (i2c.c:856-928):
 
 ```c
 int32_t i2c_test_wrong_addr(void)
@@ -1838,6 +1898,26 @@ int32_t i2c_test_nack(void)
     printc("========================================\n\n");
 
     return 0;  // Success
+}
+
+int32_t i2c_test_timeout(void)
+{
+    // Toggle the fault injection flag
+    fault_inject_timeout = !fault_inject_timeout;
+
+    printc("\n========================================\n");
+    printc("  Fault Injection: Timeout\n");
+    printc("========================================\n");
+    printc("  Status: %s\n", fault_inject_timeout ? "ENABLED" : "DISABLED");
+    if (fault_inject_timeout) {
+        printc("  Next I2C operation will use 1ms timeout instead of %dms\n", 
+               CONFIG_I2C_DFLT_TRANS_GUARD_TIME_MS);
+        printc("  This simulates a stuck operation (sensor crashed, bus stuck)\n");
+    } else {
+        printc("  Normal timeout restored\n");
+    }
+    printc("========================================\n\n");
+    return 0;
 }
 ```
 
