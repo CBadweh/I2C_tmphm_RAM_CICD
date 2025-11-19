@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(git ls-tree:*)",
+      "Bash(git branch:*)",
+      "Bash(build.bat)",
+      "Bash(cmd /c \"c:\\Users\\Sheen\\Desktop\\Embedded_System\\gene_Baremetal_I2CTmphm_RAM_CICD\\Badweh_Development\\ci-cd-tools\\build.bat\")",
+      "Bash(find:*)",
+      "Bash(make clean:*)",
+      "Bash(make:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

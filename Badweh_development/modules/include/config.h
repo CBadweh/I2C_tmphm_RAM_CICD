@@ -14,7 +14,7 @@
     #define CONFIG_STM32_LL_I2C_HDR "stm32f4xx_ll_i2c.h"
     #define CONFIG_STM32_LL_RCC_HDR "stm32f4xx_ll_rcc.h"
     #define CONFIG_STM32_LL_USART_HDR "stm32f4xx_ll_usart.h"
-    #define CONFIG_STM32_LL_IWDG_HDR "stm32f4xx_ll_iwdg.h"
+    // #define CONFIG_STM32_LL_IWDG_HDR "stm32f4xx_ll_iwdg.h"  // Commented out - file not present in Day 3
 
     #define CONFIG_DIO_TYPE 1
     #define CONFIG_I2C_TYPE 1
@@ -68,7 +68,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 // FAULT feature (enabled for Day 4)
-#define CONFIG_FEAT_FAULT 1
+#define CONFIG_FEAT_FAULT 0
 
 #if defined CONFIG_FEAT_FAULT
     #define CONFIG_FAULT_PRESENT 1
