@@ -3,16 +3,15 @@
 # Toolchain: GNU Tools for STM32 (12.3.rel1)
 ################################################################################
 
-# Add inputs and outputs from these tool invocations to the build variables
-# stubs_day3.c - temporary stubs for Day 3 build
+# Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS += \
-../modules/stubs_day3.c
+../modules/stubs_day3.c 
 
 OBJS += \
-./modules/stubs_day3.o
+./modules/stubs_day3.o 
 
 C_DEPS += \
-./modules/stubs_day3.d
+./modules/stubs_day3.d 
 
 
 # Each subdirectory must supply rules for building sources it contributes
@@ -25,3 +24,4 @@ clean-modules:
 	-$(RM) ./modules/stubs_day3.cyclo ./modules/stubs_day3.d ./modules/stubs_day3.o ./modules/stubs_day3.su
 
 .PHONY: clean-modules
+

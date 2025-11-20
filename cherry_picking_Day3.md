@@ -1605,6 +1605,498 @@ ls -lh Badweh_development/modules/lwl/lwl.c
 
 ---
 
+## Post-Cherry-Pick Issues and Fixes
+
+### The Reality: Cherry-Pick Isn't Always Perfect
+
+After completing the cherry-pick process, we discovered that **the code doesn't build immediately**. This is an important lesson: cherry-picking copies commits, but doesn't guarantee the result will work without additional fixes.
+
+### Issue #1: Missing Module References in app_main.c
+
+**Problem:**
+When building from STM32CubeIDE, we got compilation errors:
+
+```
+../app1/app_main.c:34:10: fatal error: blinky.h: No such file or directory
+   34 | #include "blinky.h"
+      |          ^~~~~~~~~~
+compilation terminated.
+```
+
+**Root Cause:**
+The third cherry-pick (commit ee87f4e) used `git checkout --theirs`, which took an **older version** of `app_main.c` that included modules not present in Day 3:
+- `blinky.h` - LED blinking module (not needed)
+- `gps_gtu7.h` - GPS module (not needed)
+- `mem.h` - Memory module (not needed)
+- `stat.h` - Statistics module (not needed)
+
+**Why this happened:**
+Commit `ee87f4e` is older than commit `4df4da8`, so when we resolved conflicts with `--theirs`, we inadvertently took the older version with extra modules.
+
+**Solution:**
+Extract the correct Day 3 version directly from commit `4df4da8`:
+
+```bash
+# Get the correct version from the Day 3 implementation commit
+git show 4df4da8:Badweh_development/app1/app_main.c > /tmp/app_main_day3.c
+
+# Replace the incorrect version
+cp /tmp/app_main_day3.c Badweh_development/app1/app_main.c
+```
+
+**The corrected includes for Day 3:**
+```c
+#include <stddef.h>
+#include <stdio.h>
+#include <string.h>
+
+#include "console.h"
+#include "dio.h"
+#include "i2c.h"
+#include "lwl.h"
+#include "module.h"
+#include "tmphm.h"
+#include "ttys.h"
+#include "tmr.h"
+```
+
+**Key takeaway:** When cherry-picking multiple related commits, conflicts may result in mixing versions from different commits. Always verify the result matches your intent.
+
+---
+
+### Issue #2: Missing DIO Module Implementation
+
+**Problem:**
+After fixing the includes, linking failed:
+
+```
+undefined reference to `dio_init'
+undefined reference to `dio_start'
+```
+
+**Root Cause:**
+The DIO module header (`dio.h`) exists, but the implementation (`dio.c`) was never cherry-picked because none of our three commits added it. The DIO module existed on the `day6_fixed` branch from the initial project setup.
+
+**Investigation:**
+```bash
+# Check if dio.c exists on day6_fixed
+git ls-tree -r day6_fixed --name-only | grep "modules/dio/"
+
+# Output shows it exists:
+Badweh_development/modules/dio/dio.c
+```
+
+**Solution:**
+Manually copy the DIO module from `day6_fixed`:
+
+```bash
+# Create the dio directory
+mkdir -p Badweh_development/modules/dio
+
+# Copy dio.c from day6_fixed branch
+git show day6_fixed:Badweh_development/modules/dio/dio.c > Badweh_development/modules/dio/dio.c
+```
+
+**Why this is necessary:**
+Cherry-pick only copies **changes made in specific commits**. If a file existed before those commits and wasn't modified, it won't be copied. The DIO module was added in the initial project commit, not in any of the Day 3 commits we cherry-picked.
+
+---
+
+### Issue #3: Build System Configuration
+
+**Problem:**
+Even after adding `dio.c`, the linker still couldn't find `dio_init` and `dio_start`.
+
+**Root Cause:**
+The build system (makefiles) didn't know about the DIO module:
+1. No makefile for `modules/dio/` subdirectory
+2. DIO module not included in main makefile
+3. `dio.o` not in the linker's object list
+
+**Solution - Step A: Create DIO Makefile**
+
+Create `Badweh_Development/Debug/modules/dio/subdir.mk`:
+
+```makefile
+################################################################################
+# Automatically-generated file. Do not edit!
+# Toolchain: GNU Tools for STM32 (12.3.rel1)
+################################################################################
+
+# Add inputs and outputs from these tool invocations to the build variables
+C_SRCS += \
+../modules/dio/dio.c
+
+OBJS += \
+./modules/dio/dio.o
+
+C_DEPS += \
+./modules/dio/dio.d
+
+
+# Each subdirectory must supply rules for building sources it contributes
+modules/dio/%.o modules/dio/%.su modules/dio/%.cyclo: ../modules/dio/%.c modules/dio/subdir.mk
+	arm-none-eabi-gcc "$<" -mcpu=cortex-m4 -std=gnu11 -g3 -DDEBUG -DUSE_FULL_LL_DRIVER \
+	-DHSE_VALUE=8000000 -DHSE_STARTUP_TIMEOUT=100 -DLSE_STARTUP_TIMEOUT=5000 \
+	-DLSE_VALUE=32768 -DEXTERNAL_CLOCK_VALUE=12288000 -DHSI_VALUE=16000000 \
+	-DLSI_VALUE=32000 -DVDD_VALUE=3300 -DPREFETCH_ENABLE=1 \
+	-DINSTRUCTION_CACHE_ENABLE=1 -DDATA_CACHE_ENABLE=1 -DSTM32F401xE \
+	-c -I../Core/Inc -I../Drivers/STM32F4xx_HAL_Driver/Inc \
+	-I../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I../Drivers/CMSIS/Include \
+	-I"C:/Users/Sheen/Desktop/Embedded_System/gene_Baremetal_I2CTmphm_RAM_CICD/Badweh_Development/modules/include" \
+	-O0 -ffunction-sections -fdata-sections -Wall -fstack-usage \
+	-MMD -MP -MF"$(@:%.o=%.d)" -MT"$@" --specs=nano.specs \
+	-mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -o "$@"
+
+clean: clean-modules-2f-dio
+
+clean-modules-2f-dio:
+	-$(RM) ./modules/dio/dio.cyclo ./modules/dio/dio.d ./modules/dio/dio.o ./modules/dio/dio.su
+
+.PHONY: clean-modules-2f-dio
+```
+
+**Solution - Step B: Update Main Makefile**
+
+Edit `Badweh_Development/Debug/makefile` to include the DIO module:
+
+```makefile
+-include modules/ttys/subdir.mk
+-include modules/tmr/subdir.mk
+-include modules/tmphm/subdir.mk
+-include modules/lwl/subdir.mk
+-include modules/log/subdir.mk
+-include modules/i2c/subdir.mk
+-include modules/dio/subdir.mk        # ← ADD THIS LINE
+-include modules/console/subdir.mk
+-include modules/cmd/subdir.mk
+-include modules/subdir.mk
+```
+
+**Solution - Step C: Add dio.o to Linker Object List**
+
+Edit `Badweh_Development/Debug/objects.list`:
+
+```
+"./modules/cmd/cmd.o"
+"./modules/console/console.o"
+"./modules/dio/dio.o"                 ← ADD THIS LINE
+"./modules/i2c/i2c.o"
+"./modules/log/log.o"
+"./modules/lwl/lwl.o"
+"./modules/stubs_day3.o"
+"./modules/tmphm/tmphm.o"
+"./modules/tmr/tmr.o"
+"./modules/ttys/ttys.o"
+```
+
+---
+
+### Issue #4: Compiler Flag Incompatibility
+
+**Problem:**
+Build failed with:
+
+```
+arm-none-eabi-gcc.exe: error: unrecognized command-line option '-fcyclomatic-complexity'
+```
+
+**Root Cause:**
+The `-fcyclomatic-complexity` flag is only available in GCC 12+, but the system has GCC 10.3.1. This flag should have been removed by the Day 3 build fix commit, but the IDE regenerated the makefiles with this flag included.
+
+**Why this happened:**
+- The Day 3 build fix commit (0c64c92) removed this flag
+- We used `git rm` on the Debug makefiles during cherry-pick
+- STM32CubeIDE regenerated the makefiles when we opened the project
+- The IDE's project settings still had this flag enabled
+
+**Solution:**
+Remove the flag from all makefiles using `sed`:
+
+```bash
+# Find all affected makefiles
+find Badweh_Development/Debug -name "*.mk" -exec grep -l "fcyclomatic-complexity" {} \;
+
+# Remove the flag from all makefiles
+find Badweh_Development/Debug -name "*.mk" -exec sed -i 's/ -fcyclomatic-complexity//g' {} \;
+
+# Verify it's gone
+grep -n "fcyclomatic-complexity" Badweh_Development/Debug/modules/tmphm/subdir.mk
+# (should return nothing)
+```
+
+**Permanent fix (for IDE builds):**
+To prevent this issue when building from STM32CubeIDE:
+1. Open project properties in STM32CubeIDE
+2. Navigate to: C/C++ Build → Settings → Tool Settings → MCU GCC Compiler → Miscellaneous
+3. Remove `-fcyclomatic-complexity` from "Other flags"
+4. Apply and save
+
+---
+
+### Final Build Success
+
+After all fixes were applied:
+
+```bash
+cd Badweh_Development/Debug
+make all
+```
+
+**Output:**
+```
+...
+arm-none-eabi-gcc -o "Badweh_Development.elf" @"objects.list" ...
+   text	   data	    bss	    dec	    hex	filename
+  39872	    648	   6248	  46768	   b6b0	Badweh_Development.elf
+Finished building: Badweh_Development.elf
+
+arm-none-eabi-objcopy -O binary Badweh_Development.elf "Badweh_Development.bin"
+Finished building: Badweh_Development.bin
+```
+
+✅ **Build successful!**
+
+**Build artifacts:**
+- `Badweh_Development.elf` (785 KB) - Executable with debug symbols
+- `Badweh_Development.bin` (40 KB) - Binary for flashing to MCU
+- `Badweh_Development.map` (292 KB) - Memory map
+
+**Memory usage:**
+- **Text (code):** 39,872 bytes
+- **Data (initialized):** 648 bytes
+- **BSS (uninitialized):** 6,248 bytes
+- **Total RAM:** ~6.9 KB
+- **Total Flash:** ~40 KB
+
+---
+
+## Complete Post-Cherry-Pick Fix Summary
+
+### Files Modified After Cherry-Pick:
+
+1. **`app1/app_main.c`** - Replaced with correct Day 3 version from commit 4df4da8
+2. **`modules/dio/dio.c`** - Copied from day6_fixed branch
+3. **`Debug/modules/dio/subdir.mk`** - Created new makefile for DIO module
+4. **`Debug/makefile`** - Added DIO module include
+5. **`Debug/objects.list`** - Added dio.o to linker list
+6. **All `Debug/**/*.mk`** - Removed `-fcyclomatic-complexity` flag
+
+### Commands for Post-Cherry-Pick Fixes:
+
+```bash
+# Fix 1: Get correct app_main.c version
+git show 4df4da8:Badweh_development/app1/app_main.c > Badweh_development/app1/app_main.c
+
+# Fix 2: Add DIO module
+mkdir -p Badweh_development/modules/dio
+git show day6_fixed:Badweh_development/modules/dio/dio.c > Badweh_development/modules/dio/dio.c
+
+# Fix 3: Create DIO makefile
+mkdir -p Badweh_Development/Debug/modules/dio
+# (Create subdir.mk with content shown above)
+
+# Fix 4: Update main makefile
+# (Add -include modules/dio/subdir.mk)
+
+# Fix 5: Update objects.list
+# (Add "./modules/dio/dio.o")
+
+# Fix 6: Remove incompatible compiler flag
+find Badweh_Development/Debug -name "*.mk" -exec sed -i 's/ -fcyclomatic-complexity//g' {} \;
+
+# Verify and build
+cd Badweh_Development/Debug
+make clean
+make all
+```
+
+---
+
+## Lessons Learned: Cherry-Pick Realities
+
+### 1. Cherry-Pick Is Not Magic
+
+**What cherry-pick does:**
+- ✅ Copies specific commits
+- ✅ Preserves commit messages and metadata
+- ✅ Attempts to apply changes
+
+**What cherry-pick does NOT do:**
+- ❌ Guarantee the result will build
+- ❌ Copy files that existed before the commits
+- ❌ Update build system configurations automatically
+- ❌ Verify all dependencies are present
+
+### 2. Conflict Resolution Requires Judgment
+
+Using `git checkout --theirs` blindly can backfire:
+- We took the version from commit `ee87f4e` (older)
+- But we actually needed the version from `4df4da8` (Day 3)
+- **Better approach:** Manually inspect conflicts or know which commit has the right version
+
+### 3. Cherry-Pick Order Matters
+
+**Our approach (reverse chronological):**
+```
+0c64c92 (newest) → aabab15 (middle) → ee87f4e (oldest)
+```
+- More conflicts because newer commits expect changes from older ones
+- Conflict resolutions mixed versions from different commits
+
+**Better approach (chronological):**
+```
+ee87f4e (oldest) → 4df4da8 (middle) → 0c64c92 (newest)
+```
+- Fewer conflicts because changes build on each other
+- More natural progression
+
+### 4. Build Systems Need Manual Attention
+
+**IDE-generated files (makefiles, project files):**
+- Should be in `.gitignore`
+- Will be regenerated by IDE
+- May not match your manual changes
+- Need verification after cherry-pick
+
+**Manual steps required:**
+- Create makefiles for new modules
+- Update linker object lists
+- Remove incompatible compiler flags
+- Verify all dependencies are linked
+
+### 5. Always Verify After Cherry-Pick
+
+**Verification checklist:**
+- [ ] All required files present?
+- [ ] All includes reference existing files?
+- [ ] Build system knows about new files?
+- [ ] Compiler flags compatible with toolchain?
+- [ ] Clean build succeeds?
+- [ ] Binary size reasonable?
+
+---
+
+## Will It Build from STM32CubeIDE Now?
+
+### Short Answer: **Yes, with one caveat**
+
+### What Works:
+✅ **Source code is correct** - All Day 3 modules present
+✅ **Dependencies resolved** - DIO module added, includes fixed
+✅ **Makefiles configured** - DIO module in build system
+✅ **Linker knows all objects** - dio.o in objects.list
+
+### The Caveat: Compiler Flag
+
+⚠️ **The `-fcyclomatic-complexity` flag issue**
+
+**What will happen when you build from STM32CubeIDE:**
+
+1. **If you haven't removed the flag from project settings:**
+   - IDE will regenerate makefiles
+   - `-fcyclomatic-complexity` will be re-added
+   - Build will fail with same error
+
+2. **If you've removed the flag from project settings:**
+   - IDE will regenerate makefiles correctly
+   - Build will succeed
+
+### How to Fix Permanently:
+
+**Option 1: Remove from IDE project settings (RECOMMENDED)**
+
+1. Right-click project → **Properties**
+2. Navigate to: **C/C++ Build → Settings**
+3. Go to: **Tool Settings → MCU GCC Compiler → Miscellaneous**
+4. In "Other flags" field, find and remove: `-fcyclomatic-complexity`
+5. Click **Apply and Close**
+6. Clean and rebuild: **Project → Clean → Project → Build All**
+
+**Option 2: Use command-line build script**
+
+```bash
+# Use the CI/CD build script (which uses existing makefiles)
+Badweh_Development/ci-cd-tools/build.bat
+```
+
+This script uses the makefiles we already fixed, so it will work without IDE changes.
+
+### Expected Build Result from IDE:
+
+If the flag is removed from project settings, you should see:
+
+```
+Building file: ../modules/dio/dio.c
+Building file: ../modules/lwl/lwl.c
+Building file: ../modules/tmphm/tmphm.c
+...
+Linking...
+Finished building target: Badweh_Development.elf
+
+arm-none-eabi-size Badweh_Development.elf
+   text	   data	    bss	    dec	    hex	filename
+  39872	    648	   6248	  46768	   b6b0	Badweh_Development.elf
+
+Build Finished. 0 errors, 0 warnings.
+```
+
+---
+
+## Quick Reference: Post-Cherry-Pick Checklist
+
+Use this checklist after any cherry-pick operation:
+
+### 1. Verify Source Files
+```bash
+# Check all includes reference existing files
+grep -r "#include" Badweh_development/app1/app_main.c | while read line; do
+    header=$(echo $line | sed 's/.*"\(.*\)".*/\1/')
+    [ -f "Badweh_development/modules/include/$header" ] || echo "Missing: $header"
+done
+```
+
+### 2. Check for Missing Dependencies
+```bash
+# Try to build and check for undefined references
+cd Badweh_Development/Debug
+make clean
+make all 2>&1 | grep "undefined reference"
+```
+
+### 3. Verify Build System
+```bash
+# Check if all .c files have corresponding .mk entries
+find Badweh_development/modules -name "*.c" -type f
+cat Badweh_Development/Debug/makefile | grep "include modules"
+cat Badweh_Development/Debug/objects.list
+```
+
+### 4. Check Compiler Flags
+```bash
+# Look for incompatible flags
+grep -r "fcyclomatic-complexity" Badweh_Development/Debug/
+```
+
+### 5. Test Build
+```bash
+cd Badweh_Development/Debug
+make clean
+make all
+ls -lh Badweh_Development.{elf,bin,map}
+```
+
+---
+
 **End of Tutorial**
 
-This document demonstrates a real-world git cherry-pick workflow with multiple conflict types and their resolutions. Use it as a reference for future cherry-pick operations!
+This document demonstrates a **real-world git cherry-pick workflow** including:
+- ✅ Step-by-step cherry-pick process
+- ✅ Multiple conflict types and resolutions
+- ✅ Post-cherry-pick issues and fixes
+- ✅ Build system integration challenges
+- ✅ Lessons learned and best practices
+
+**Key Insight:** Cherry-picking is a powerful tool, but it's not a complete solution. Always verify and test the result, and be prepared to make manual adjustments for build systems, dependencies, and toolchain compatibility.
+
+Use this as a reference for future cherry-pick operations!
