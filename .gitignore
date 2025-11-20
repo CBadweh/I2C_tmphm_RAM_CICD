@@ -42,9 +42,10 @@ RemoteSystemsTempFiles/
 # Current approach: TRACK .cproject and .project for team consistency
 # This allows source exclusions to be shared across the team
 
-# .cproject     # Uncomment to IGNORE (each developer configures locally)
-# .project      # Uncomment to IGNORE (each developer configures locally)
-.classpath
+Badweh_Development/.cproject   
+Badweh_Development/.project      
+Badweh_Development/.classpath
+Badweh_Development/.mxproject
 
 # Alternative approach (better for larger teams):
 # Don't track .cproject/.project, instead document required settings in README
@@ -116,3 +117,9 @@ Desktop.ini      # Windows
 # ✓ CI/CD scripts: ci-cd-tools/*.bat, *.py
 # ✓ Makefiles: Only if manually maintained (not IDE-generated)
 # ------------------------------------------------------------------------------
+
+
+Badweh_Development/.cproject
+Badweh_Development/.project
+Badweh_Development/.classpath
+Badweh_Development/.mxproject
