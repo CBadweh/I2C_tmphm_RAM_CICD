@@ -2088,6 +2088,191 @@ ls -lh Badweh_Development.{elf,bin,map}
 
 ---
 
+## Issue #5: Console UART Misconfiguration
+
+### The Reality: No Console Output Despite Successful Flash
+
+After fixing all build issues and successfully flashing the firmware, there was **no output on the serial console** (PuTTY), even though the LED blink diagnostic confirmed the MCU was running.
+
+**Problem:**
+- Built and flashed successfully
+- LED blinked 3 times on startup (confirming MCU execution)
+- PuTTY showed no output on COM4 at 115200 baud
+- Console was completely silent
+
+**Investigation:**
+```bash
+# Check which UART was initialized
+grep "ttys_init" Badweh_development/app1/app_main.c
+# Shows: ttys_init(TTYS_INSTANCE_UART2, &ttys_cfg);
+
+# Check which UART console was configured to use
+grep "CONFIG_CONSOLE_DFLT_TTYS_INSTANCE" Badweh_development/modules/include/config.h
+# Shows: #define CONFIG_CONSOLE_DFLT_TTYS_INSTANCE 2
+
+# Check the UART instance enum values
+grep -A 5 "enum ttys_instance_id" Badweh_development/modules/include/ttys.h
+```
+
+**Root Cause:**
+The console module default configuration was set to the wrong UART instance:
+
+```c
+// ttys.h enum definition:
+enum ttys_instance_id {
+    TTYS_INSTANCE_UART1,  // = 0
+    TTYS_INSTANCE_UART2,  // = 1 (ST-Link Virtual COM Port)
+    TTYS_INSTANCE_UART6,  // = 2
+
+    TTYS_NUM_INSTANCES
+};
+
+// config.h had:
+#define CONFIG_CONSOLE_DFLT_TTYS_INSTANCE 2  // UART6 (NOT connected!)
+
+// But app_main.c initialized:
+ttys_init(TTYS_INSTANCE_UART2, &ttys_cfg);  // = 1
+```
+
+**Why this happened:**
+- The console module uses `CONFIG_CONSOLE_DFLT_TTYS_INSTANCE` from `config.h`
+- This was set to value `2`, which maps to `TTYS_INSTANCE_UART6` (enum index 2)
+- UART6 is not connected to the ST-Link Virtual COM Port
+- `app_main.c` correctly initialized UART2 (the ST-Link VCP)
+- Result: Console sent output to UART6 (nowhere), while PuTTY listened on UART2
+
+**Solution:**
+Edit `Badweh_development/modules/include/config.h`:
+
+```c
+// Module console
+#define CONFIG_CONSOLE_PRINT_BUF_SIZE 240
+#define CONFIG_CONSOLE_DFLT_TTYS_INSTANCE 1  // TTYS_INSTANCE_UART2 (ST-Link VCP)
+```
+
+**Fix Applied:**
+```bash
+# Edit config.h to use UART2 (enum value 1)
+# Changed from: CONFIG_CONSOLE_DFLT_TTYS_INSTANCE 2
+# Changed to:   CONFIG_CONSOLE_DFLT_TTYS_INSTANCE 1
+
+# Rebuild and reflash
+cd Badweh_Development
+ci-cd-tools/build.bat
+
+# Output shows successful flash:
+#   text     data      bss      dec      hex filename
+#  39504      640     6568    46712     b678 Badweh_Development.elf
+# File download complete
+# Hard reset is performed
+```
+
+**Verification:**
+After reflashing with the corrected configuration:
+
+**PuTTY Output:**
+```
+========================================
+  DAY 3: TMPHM Module Integration
+========================================
+
+MODE: TMPHM Automatic Sensor Sampling
+      (Background operation, 1 sec cycle)
+      Query with: tmphm test lastmeas 0
+
+[INIT] Initializing modules...
+  - TMPHM (Temp/Humidity) initialized
+
+[START] Starting modules...
+  - LWL (Lightweight Logging) started
+  - TMPHM started (1-sec sampling)
+
+[READY] Entering super loop...
+TMPHM running in background.
+Console commands available:
+  - tmphm status
+  - tmphm test lastmeas 0
+  - i2c status
+
+>
+47.015 INFO temp=273 degC*10 hum=381 %*10
+48.015 INFO temp=273 degC*10 hum=382 %*10
+49.015 INFO temp=273 degC*10 hum=382 %*10
+50.015 INFO temp=273 degC*10 hum=382 %*10
+```
+
+✅ **Console working!** Temperature/humidity readings visible every second.
+
+**Sensor readings:**
+- **Temperature:** 27.3°C (273 degC×10)
+- **Humidity:** 38.1-38.2% (381-382 %×10)
+
+**Key takeaway:** Even when hardware and build are correct, software configuration mismatches (like UART instance numbers) can cause silent failures. Always verify that initialized peripherals match the configuration used by dependent modules.
+
+**Diagnostic technique used:**
+Added a diagnostic LED blink before `app_main()` to confirm MCU execution:
+```c
+// In Core/Src/main.c before app_main():
+for (int i = 0; i < 6; i++) {
+    LL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);  // Blink LED 3 times
+    for (volatile uint32_t delay = 0; delay < 500000; delay++);
+}
+```
+
+This confirmed the MCU was running, narrowing the issue to UART communication.
+
+---
+
+## Complete Fix Summary (All Issues)
+
+### Files Modified After Cherry-Pick:
+
+1. **`app1/app_main.c`** - Replaced with correct Day 3 version from commit 4df4da8
+2. **`modules/dio/dio.c`** - Copied from day6_fixed branch
+3. **`modules/include/config.h`** - Fixed console UART instance (2→1)
+4. **`Core/Src/main.c`** - Added LED blink diagnostic
+5. **`Debug/modules/dio/subdir.mk`** - Created new makefile for DIO module
+6. **`Debug/makefile`** - Added DIO module include
+7. **`Debug/objects.list`** - Added dio.o to linker list
+8. **All `Debug/**/*.mk`** - Removed `-fcyclomatic-complexity` flag
+
+### All Post-Cherry-Pick Fixes:
+
+```bash
+# Fix 1: Get correct app_main.c version
+git show 4df4da8:Badweh_development/app1/app_main.c > Badweh_development/app1/app_main.c
+
+# Fix 2: Add DIO module
+mkdir -p Badweh_development/modules/dio
+git show day6_fixed:Badweh_development/modules/dio/dio.c > Badweh_development/modules/dio/dio.c
+
+# Fix 3: Create DIO makefile
+mkdir -p Badweh_Development/Debug/modules/dio
+# (Create subdir.mk with correct compiler flags)
+
+# Fix 4: Update main makefile
+# (Add -include modules/dio/subdir.mk)
+
+# Fix 5: Update objects.list
+# (Add "./modules/dio/dio.o")
+
+# Fix 6: Remove incompatible compiler flag
+find Badweh_Development/Debug -name "*.mk" -exec sed -i 's/ -fcyclomatic-complexity//g' {} \;
+
+# Fix 7: Fix console UART configuration
+# Edit modules/include/config.h:
+# Change CONFIG_CONSOLE_DFLT_TTYS_INSTANCE from 2 to 1
+
+# Fix 8: Add diagnostic LED blink (optional, for debugging)
+# Edit Core/Src/main.c to add LED blink before app_main()
+
+# Final build and flash
+cd Badweh_Development
+ci-cd-tools/build.bat
+```
+
+---
+
 **End of Tutorial**
 
 This document demonstrates a **real-world git cherry-pick workflow** including:
@@ -2095,8 +2280,17 @@ This document demonstrates a **real-world git cherry-pick workflow** including:
 - ✅ Multiple conflict types and resolutions
 - ✅ Post-cherry-pick issues and fixes
 - ✅ Build system integration challenges
+- ✅ Hardware/software configuration debugging
+- ✅ Diagnostic techniques for embedded systems
 - ✅ Lessons learned and best practices
 
-**Key Insight:** Cherry-picking is a powerful tool, but it's not a complete solution. Always verify and test the result, and be prepared to make manual adjustments for build systems, dependencies, and toolchain compatibility.
+**Key Insights:**
+1. Cherry-picking is a powerful tool, but it's not a complete solution
+2. Always verify and test the result at multiple levels (build, flash, run, output)
+3. Configuration mismatches can cause silent failures even when code is correct
+4. Diagnostic LEDs are invaluable for confirming MCU execution
+5. Be prepared to make manual adjustments for build systems, dependencies, and toolchain compatibility
+
+**Final Status:** ✅ Day 3 TMPHM module successfully integrated and running with live temperature/humidity readings!
 
 Use this as a reference for future cherry-pick operations!
