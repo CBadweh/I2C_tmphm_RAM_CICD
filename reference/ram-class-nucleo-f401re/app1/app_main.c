@@ -1,8 +1,8 @@
 /*
- * @brief Main application file
- *
- * This file is the main application file that initializes and starts the various
- * modules and then runs the super loop.
+ * TMPHM automatic sampling app for STM32F401RE.
+ * - Console + command shell live on `TTYS_INSTANCE_2`.
+ * - TMPHM uses `I2C_INSTANCE_3` talking to the SHT31 (address comes from `config.h`).
+ * - Build/flash: `ci-cd-tools/build.bat` then `ci-cd-tools/flash.bat`; monitor UART at 115200.
  *
  * MIT License
  * 
@@ -88,6 +88,11 @@ static struct tmphm_cfg tmphm_cfg;
 // Public (global) functions
 ////////////////////////////////////////////////////////////////////////////////
 
+/*
+ * Bring up timers, console, I2C, TMPHM, and watchdog before jumping into the
+ * super loop that feeds `tmphm_run()`. Uses TTYS2 for the CLI and TMPHM’s
+ * configuration derived from `config.h` so SHT31 stays on I2C3.
+ */
 void app_main(void)
 {
     struct tmr_cfg tmr_cfg;
@@ -187,8 +192,6 @@ static int32_t cmd_main_status(int32_t argc, const char** argv)
         printc("Invalid arguments\n");
         return MOD_ERR_ARG;
     }
-
-
 
     if (clear) {
         printc("Clearing loop stat\n");

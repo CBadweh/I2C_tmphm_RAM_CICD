@@ -194,4 +194,7 @@ reference/tmphm/Debug/modules/tmr/tmr.o
 reference/tmphm/Debug/modules/ttys/subdir.mk
 reference/tmphm/Debug/modules/ttys/ttys.d
 reference/tmphm/Debug/modules/ttys/ttys.o
+reference/tmphm/.settings/
+
 reference/ram-class-nucleo-f401re/Debug/
+reference/ram-class-nucleo-f401re/.settings/
