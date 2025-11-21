@@ -124,6 +124,7 @@ Badweh_Development/.project
 Badweh_Development/.classpath
 Badweh_Development/.mxproject
 Badweh_Development/Badweh_Development (1).launch
+reference/tmphm/Debug/
 reference/tmphm/Debug/makefile
 reference/tmphm/Debug/objects.list
 reference/tmphm/Debug/sources.mk
@@ -193,3 +194,4 @@ reference/tmphm/Debug/modules/tmr/tmr.o
 reference/tmphm/Debug/modules/ttys/subdir.mk
 reference/tmphm/Debug/modules/ttys/ttys.d
 reference/tmphm/Debug/modules/ttys/ttys.o
+reference/ram-class-nucleo-f401re/Debug/
