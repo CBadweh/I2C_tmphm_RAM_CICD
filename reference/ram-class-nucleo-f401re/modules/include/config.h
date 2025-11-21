@@ -70,112 +70,32 @@
 // (makefile).
 ////////////////////////////////////////////////////////////////////////////////
 
-#if defined STM32F103xB // STM32F103C8T6
 
-    #define CONFIG_STM32_LL_BUS_HDR "stm32f1xx_ll_bus.h"
-    #define CONFIG_STM32_LL_CORTEX_HDR "stm32f1xx_ll_cortex.h"
-    #define CONFIG_STM32_LL_GPIO_HDR "stm32f1xx_ll_gpio.h"
-    #define CONFIG_STM32_LL_I2C_HDR "stm32f1xx_ll_i2c.h"
-    #define CONFIG_STM32_LL_RCC_HDR "stm32f1xx_ll_rcc.h"
-    #define CONFIG_STM32_LL_USART_HDR "stm32f1xx_ll_usart.h"
 
-    #define CONFIG_DIO_TYPE 3
-    #define CONFIG_I2C_TYPE 1
-    #define CONFIG_USART_TYPE 1
-    #define CONFIG_MPU_TYPE -1
+#define CONFIG_STM32_LL_BUS_HDR "stm32f4xx_ll_bus.h"
+#define CONFIG_STM32_LL_CORTEX_HDR "stm32f4xx_ll_cortex.h"
+#define CONFIG_STM32_LL_GPIO_HDR "stm32f4xx_ll_gpio.h"
+#define CONFIG_STM32_LL_I2C_HDR "stm32f4xx_ll_i2c.h"
+#define CONFIG_STM32_LL_RCC_HDR "stm32f4xx_ll_rcc.h"
+#define CONFIG_STM32_LL_USART_HDR "stm32f4xx_ll_usart.h"
+#define CONFIG_STM32_LL_IWDG_HDR "stm32f4xx_ll_iwdg.h"
 
-    #define CONFIG_OS_CFG_IRQN_TYPE_MIN MemoryManagement_IRQn 
-    #define CONFIG_OS_CFG_IRQN_TYPE_MAX USBWakeUp_IRQn
-    #define CONFIG_OS_IRQN_TYPE_EXC_NUM_OFFSET (4 - MemoryManagement_IRQn)
+#define CONFIG_DIO_TYPE 1
+#define CONFIG_I2C_TYPE 1
+#define CONFIG_USART_TYPE 1
+#define CONFIG_MPU_TYPE 1
 
-    #define CONFIG_FLASH_TYPE 3
-    #define CONFIG_FLASH_BASE_ADDR 0x08000000
-    #define CONFIG_FLASH_PAGE_SIZE 1024
-    #define CONFIG_FLASH_NUM_PAGE 64
-    #define CONFIG_FLASH_SIZE (64*1024)
-    #define CONFIG_FLASH_WRITE_BYTES 8
+#define CONFIG_OS_CFG_IRQN_TYPE_MIN MemoryManagement_IRQn
+#define CONFIG_OS_CFG_IRQN_TYPE_MAX SPI4_IRQn
+#define CONFIG_OS_IRQN_TYPE_EXC_NUM_OFFSET (4 - MemoryManagement_IRQn)
 
-#elif defined STM32F401xE
+#define CONFIG_FLASH_TYPE 2
+#define CONFIG_FLASH_BASE_ADDR 0x08000000
+#define CONFIG_FLASH_WRITE_BYTES 8
 
-    #define CONFIG_STM32_LL_BUS_HDR "stm32f4xx_ll_bus.h"
-    #define CONFIG_STM32_LL_CORTEX_HDR "stm32f4xx_ll_cortex.h"
-    #define CONFIG_STM32_LL_GPIO_HDR "stm32f4xx_ll_gpio.h"
-    #define CONFIG_STM32_LL_I2C_HDR "stm32f4xx_ll_i2c.h"
-    #define CONFIG_STM32_LL_RCC_HDR "stm32f4xx_ll_rcc.h"
-    #define CONFIG_STM32_LL_USART_HDR "stm32f4xx_ll_usart.h"
-    #define CONFIG_STM32_LL_IWDG_HDR "stm32f4xx_ll_iwdg.h"
+#define CONFIG_FAULT_FLASH_PANIC_ADDR 0x08004000
 
-    #define CONFIG_DIO_TYPE 1
-    #define CONFIG_I2C_TYPE 1
-    #define CONFIG_USART_TYPE 1
-    #define CONFIG_MPU_TYPE 1
 
-    #define CONFIG_OS_CFG_IRQN_TYPE_MIN MemoryManagement_IRQn 
-    #define CONFIG_OS_CFG_IRQN_TYPE_MAX SPI4_IRQn
-    #define CONFIG_OS_IRQN_TYPE_EXC_NUM_OFFSET (4 - MemoryManagement_IRQn)
-
-    #define CONFIG_FLASH_TYPE 2
-    #define CONFIG_FLASH_BASE_ADDR 0x08000000
-    #define CONFIG_FLASH_WRITE_BYTES 8
-
-    #define CONFIG_FAULT_FLASH_PANIC_ADDR 0x08004000
-
-#elif defined STM32L452xx
-
-    #define CONFIG_STM32_LL_BUS_HDR "stm32l4xx_ll_bus.h"
-    #define CONFIG_STM32_LL_CORTEX_HDR "stm32l4xx_ll_cortex.h"
-    #define CONFIG_STM32_LL_GPIO_HDR "stm32l4xx_ll_gpio.h"
-    #define CONFIG_STM32_LL_I2C_HDR "stm32l4xx_ll_i2c.h"
-    #define CONFIG_STM32_LL_RCC_HDR "stm32l4xx_ll_rcc.h"
-    #define CONFIG_STM32_LL_USART_HDR "stm32l4xx_ll_usart.h"
-    #define CONFIG_STM32_LL_IWDG_HDR "stm32l4xx_ll_iwdg.h"
-
-    #define CONFIG_DIO_TYPE 2
-    #define CONFIG_I2C_TYPE 0
-    #define CONFIG_USART_TYPE 2
-
-    #define CONFIG_OS_CFG_IRQN_TYPE_MIN MemoryManagement_IRQn 
-    #define CONFIG_OS_CFG_IRQN_TYPE_MAX I2C4_ER_IRQn
-    #define CONFIG_OS_IRQN_TYPE_EXC_NUM_OFFSET (4 - MemoryManagement_IRQn)
-
-    #define CONFIG_FLASH_TYPE 1
-    #define CONFIG_FLASH_BASE_ADDR 0x08000000
-    #define CONFIG_FLASH_SIZE (512*1024)
-    #define CONFIG_FLASH_PAGE_SIZE 2048
-    #define CONFIG_FLASH_NUM_PAGE 256
-    #define CONFIG_FLASH_WRITE_BYTES 8
-
-#elif defined STM32U575xx
-
-    #define CONFIG_STM32_LL_BUS_HDR "stm32u5xx_ll_bus.h"
-    #define CONFIG_STM32_LL_CORTEX_HDR "stm32u5xx_ll_cortex.h"
-    #define CONFIG_STM32_LL_GPIO_HDR "stm32u5xx_ll_gpio.h"
-    #define CONFIG_STM32_LL_I2C_HDR "stm32u5xx_ll_i2c.h"
-    #define CONFIG_STM32_LL_RCC_HDR "stm32u5xx_ll_rcc.h"
-    #define CONFIG_STM32_LL_USART_HDR "stm32u5xx_ll_usart.h"
-    #define CONFIG_STM32_LL_IWDG_HDR "stm32u5xx_ll_iwdg.h"
-
-    #define CONFIG_DIO_TYPE 4
-    #define CONFIG_I2C_TYPE 0
-    #define CONFIG_USART_TYPE 3
-    #define CONFIG_MPU_TYPE 2
-
-    #define CONFIG_OS_CFG_IRQN_TYPE_MIN MemoryManagement_IRQn 
-    #define CONFIG_OS_CFG_IRQN_TYPE_MAX FMAC_IRQn
-    #define CONFIG_OS_IRQN_TYPE_EXC_NUM_OFFSET (4 - MemoryManagement_IRQn)
-
-    #define CONFIG_FLASH_TYPE 4
-    #define CONFIG_FLASH_BASE_ADDR 0x08000000
-    #define CONFIG_FLASH_SIZE (256*8192)
-    #define CONFIG_FLASH_PAGE_SIZE 8192
-    #define CONFIG_FLASH_NUM_BANK 2
-    #define CONFIG_FLASH_NUM_PAGE 256
-    #define CONFIG_FLASH_WRITE_BYTES 16
-    #define CONFIG_FAULT_FLASH_BANK_NUM 1
-
-#else
-    #error Unknown processor
-#endif
 
 ////////////////////////////////////////////////////////////////////////////////
 // Common settings.

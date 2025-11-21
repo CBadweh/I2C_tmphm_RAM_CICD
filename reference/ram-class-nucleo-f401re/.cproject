@@ -97,8 +97,8 @@
 					<sourceEntries>
 						<entry excluding="Src/stm32f4xx_it.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Core"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Drivers"/>
-						<entry flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="app1"/>
-						<entry flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="modules"/>
+						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="app1"/>
+						<entry excluding="include/gps_gtu7.h|gps_gtu7|include/blinky.h|blinky" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="modules"/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
