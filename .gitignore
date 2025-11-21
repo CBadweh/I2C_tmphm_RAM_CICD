@@ -198,3 +198,12 @@ reference/tmphm/.settings/
 
 reference/ram-class-nucleo-f401re/Debug/
 reference/ram-class-nucleo-f401re/.settings/
+
+
+
+I2C_TMPHM_RAM_CICD/Debug/
+I2C_TMPHM_RAM_CICD/.settings/
+I2C_TMPHM_RAM_CICD/.cproject
+I2C_TMPHM_RAM_CICD/.project
+I2C_TMPHM_RAM_CICD/.classpath
+I2C_TMPHM_RAM_CICD/.mxproject
