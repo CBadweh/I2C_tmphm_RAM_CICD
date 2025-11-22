@@ -97,6 +97,13 @@ int main(void)
   MX_I2C3_Init();
   /* USER CODE BEGIN 2 */
 
+  // DIAGNOSTIC: Blink LED rapidly 3 times to show MCU is running
+  // LED2 is on PA5, should already be configured by MX_GPIO_Init()
+  for (int i = 0; i < 6; i++) {
+      LL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);  // Toggle LED
+      for (volatile uint32_t delay = 0; delay < 500000; delay++);  // ~0.5s delay
+  }
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
