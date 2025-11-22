@@ -23,7 +23,7 @@ pipeline {
 
         stage('Flash-Debug') { 
             steps {
-                bat "${TOOL_DIR}\\flash.bat $params.DUT_STLINK_sn ${WORKSPACE}\\Debug\\ci-cd-class-1.bin"
+                bat "${TOOL_DIR}\\flash.bat $params.DUT_STLINK_sn ${WORKSPACE}\\Debug\\I2C_TmpHm_RAM_CICD.bin"
             }
         }
 
