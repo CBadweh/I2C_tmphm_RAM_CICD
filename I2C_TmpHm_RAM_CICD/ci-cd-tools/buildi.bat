@@ -26,7 +26,7 @@ rem Use Jenkins WORKSPACE if available, otherwise use hardcoded local path
 echo [DEBUG] Checking WORKSPACE variable...
 if defined WORKSPACE (
     echo [DEBUG] WORKSPACE is defined: %WORKSPACE%
-    set "ws_root=%WORKSPACE%"
+    set "ws_root=%WORKSPACE%\I2C_TmpHm_RAM_CICD"
 ) else (
     echo [DEBUG] WORKSPACE is NOT defined, using hardcoded path
     set "ws_root=C:\Users\Sheen\Desktop\Embedded_System\gene_Baremetal_I2CTmphm_RAM_CICD\I2C_TmpHm_RAM_CICD"
