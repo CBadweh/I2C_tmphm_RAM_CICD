@@ -29,4 +29,6 @@ if defined WORKSPACE (
 
 set "build_dir=%ws_root%\%build_type%"
 
-"%ws_root%\ci-cd-tools\build.bat" "%build_dir%" %build_type% %target%
+rem Use %~dp0 to get the directory where this script is located (more reliable than absolute path)
+set "script_dir=%~dp0"
+"%script_dir%build.bat" "%build_dir%" %build_type% %target%
