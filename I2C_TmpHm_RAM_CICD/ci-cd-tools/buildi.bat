@@ -20,7 +20,12 @@ set "build_type=%1"
 set "target=%2"
 
 :set_build_dir
-set "ws_root=C:\Users\Sheen\Desktop\Embedded_System\gene_Baremetal_I2CTmphm_RAM_CICD\I2C_TmpHm_RAM_CICD"
+rem Use Jenkins WORKSPACE if available, otherwise use hardcoded local path
+if defined WORKSPACE (
+    set "ws_root=%WORKSPACE%"
+) else (
+    set "ws_root=C:\Users\Sheen\Desktop\Embedded_System\gene_Baremetal_I2CTmphm_RAM_CICD\I2C_TmpHm_RAM_CICD"
+)
 
 set "build_dir=%ws_root%\%build_type%"
 
