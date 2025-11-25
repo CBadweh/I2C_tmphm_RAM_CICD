@@ -1,5 +1,8 @@
-rem @echo off
+@echo on
 set "usage=usage: buildi [{Debug|Release} {all|clean}]"
+
+echo [DEBUG] buildi.bat started
+echo [DEBUG] Arguments received: %1 %2 %3
 
 setlocal
 
@@ -15,15 +18,17 @@ echo "%usage%"
 exit /b 1
 
 :set_type_target
-set 
 set "build_type=%1"
 set "target=%2"
 
 :set_build_dir
 rem Use Jenkins WORKSPACE if available, otherwise use hardcoded local path
+echo [DEBUG] Checking WORKSPACE variable...
 if defined WORKSPACE (
+    echo [DEBUG] WORKSPACE is defined: %WORKSPACE%
     set "ws_root=%WORKSPACE%"
 ) else (
+    echo [DEBUG] WORKSPACE is NOT defined, using hardcoded path
     set "ws_root=C:\Users\Sheen\Desktop\Embedded_System\gene_Baremetal_I2CTmphm_RAM_CICD\I2C_TmpHm_RAM_CICD"
 )
 
@@ -47,4 +52,8 @@ if exist "%script_dir%build.bat" (
 )
 
 echo [DEBUG] Calling build.bat...
-"%script_dir%build.bat" "%build_dir%" %build_type% %target%
+call "%script_dir%build.bat" "%build_dir%" %build_type% %target%
+if errorlevel 1 (
+    echo [ERROR] build.bat returned error code: %errorlevel%
+    exit /b %errorlevel%
+)
