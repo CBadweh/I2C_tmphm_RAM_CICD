@@ -14,7 +14,17 @@ set "build_dir=%1"
 set "build_type=%2"
 set "target=%3"
 
-if not exist "%build_dir%" mkdir "%build_dir%"
+echo [DEBUG build.bat] Received arguments:
+echo [DEBUG build.bat]   build_dir=%build_dir%
+echo [DEBUG build.bat]   build_type=%build_type%
+echo [DEBUG build.bat]   target=%target%
+
+if not exist "%build_dir%" (
+    echo [DEBUG build.bat] Creating directory: %build_dir%
+    mkdir "%build_dir%"
+) else (
+    echo [DEBUG build.bat] Directory already exists: %build_dir%
+)
 
 rem Check if directory was created successfully
 if not exist "%build_dir%" (

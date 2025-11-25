@@ -31,4 +31,20 @@ set "build_dir=%ws_root%\%build_type%"
 
 rem Use %~dp0 to get the directory where this script is located (more reliable than absolute path)
 set "script_dir=%~dp0"
+
+rem Debug output
+echo [DEBUG] Workspace root: %ws_root%
+echo [DEBUG] Build directory: %build_dir%
+echo [DEBUG] Script directory: %script_dir%
+echo [DEBUG] Build type: %build_type%
+echo [DEBUG] Target: %target%
+echo [DEBUG] Checking if build.bat exists...
+if exist "%script_dir%build.bat" (
+    echo [DEBUG] build.bat found at: %script_dir%build.bat
+) else (
+    echo [ERROR] build.bat NOT found at: %script_dir%build.bat
+    exit /b 1
+)
+
+echo [DEBUG] Calling build.bat...
 "%script_dir%build.bat" "%build_dir%" %build_type% %target%
