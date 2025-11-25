@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        TOOL_DIR = "${WORKSPACE}\\ci-cd-tools"
+        TOOL_DIR = "${WORKSPACE}\\I2C_TmpHm_RAM_CICD\\ci-cd-tools"
     }
 
     stages {
@@ -14,7 +14,7 @@ pipeline {
         stage('Build') { 
             steps {
                 echo 'Explore Build Stage.'
-                bat "\"${TOOL_DIR}\\buildi.bat\" \"${WORKSPACE}\\Debug\" Debug all"
+                bat "\"${TOOL_DIR}\\buildi.bat\" Debug all"
             }
         }
     }
