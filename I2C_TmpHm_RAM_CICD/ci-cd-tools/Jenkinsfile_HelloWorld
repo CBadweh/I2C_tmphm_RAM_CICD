@@ -11,7 +11,7 @@ pipeline {
                 echo 'Hello World.'
             }
         }
-        stage('Build') { 
+        stage('Build') {
             steps {
                 echo 'Explore Build Stage.'
                 bat "\"${TOOL_DIR}\\buildi.bat\" Debug all"
