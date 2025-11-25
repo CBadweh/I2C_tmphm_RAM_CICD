@@ -1,6 +1,10 @@
 pipeline {
     agent any
 
+    environment {
+        TOOL_DIR = "${WORKSPACE}\\ci-cd-tools"
+    }
+
     stages {
         stage('Hello') {
             steps {
