@@ -17,5 +17,11 @@ pipeline {
                 bat "\"${TOOL_DIR}\\buildi.bat\" Debug all"
             }
         }
+        stage('Flash') {
+            steps {
+                echo 'Explore Flash Stage.'
+                bat "\"${TOOL_DIR}\\flashi.bat\""
+            }
+        }
     }
 }
