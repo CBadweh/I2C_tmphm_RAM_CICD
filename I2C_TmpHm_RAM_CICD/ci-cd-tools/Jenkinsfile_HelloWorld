@@ -27,7 +27,7 @@ pipeline {
             steps {
                 bat "python \"${TOOL_DIR}\\badweh-hilt.py\" --verbose"
                 junit 'test-results-debug.xml'
-                bat "\"${TOOL_DIR}\\check-test-results.bat\" test-results-debug.xml"
+                bat "\"${TOOL_DIR}\\check-test-results.bat\" badweh-test-results.xml"
             }
         }
     }
