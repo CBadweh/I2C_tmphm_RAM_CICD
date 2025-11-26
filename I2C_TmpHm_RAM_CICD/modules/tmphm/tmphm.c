@@ -268,7 +268,8 @@ int32_t tmphm_run(enum tmphm_instance_id instance_id)
                     st->state = STATE_IDLE;
                 }
             } else {
-            	printc("CNT_RESERVE_FAIL");
+            	// printc("CNT_RESERVE_FAIL");
+                st->state = STATE_IDLE;
             }
             break;
 

@@ -282,6 +282,30 @@ int32_t cmd_execute(char* bfr)
         return 0;
     }
 
+    // Handle top-level "reset" and "version" commands by looking them up in "main" client.
+    if (num_tokens == 1 && (strcasecmp("reset", tokens[0]) == 0 ||
+                            strcasecmp("version", tokens[0]) == 0)) {
+        // Find the "main" client
+        for (idx = 0;
+             idx < MAX_CLIENTS && client_info[idx] != NULL;
+             idx++) {
+            ci = client_info[idx];
+            if (strcasecmp("main", ci->name) == 0) {
+                // Look for the command in the main client
+                for (idx2 = 0; idx2 < ci->num_cmds; idx2++) {
+                    if (strcasecmp(tokens[0], ci->cmds[idx2].name) == 0) {
+                        // Found the command, execute it
+                        ci->cmds[idx2].func(2, (const char*[]){ci->name, tokens[0]});
+                        return 0;
+                    }
+                }
+                break;
+            }
+        }
+        printc("No such command (%s)\n", tokens[0]);
+        return MOD_ERR_BAD_CMD;
+    }
+
     // Find and execute the command.
     for (idx = 0;
          idx < MAX_CLIENTS && client_info[idx] != NULL;

@@ -156,6 +156,7 @@ static void op_stop_fail(struct i2c_state* st, enum i2c_errors error);
 
 static int32_t cmd_i2c_status(int32_t argc, const char** argv);
 static int32_t cmd_i2c_test(int32_t argc, const char** argv);
+// static int32_t i2c_run_auto_test(int32_t argc, const char** argv);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Private (static) variables
@@ -176,6 +177,12 @@ static struct cmd_cmd_info cmds[] = {
         .func = cmd_i2c_test,
         .help = "Run test, usage: i2c test [<op> [<arg>]] (enter no op for help)",
     }
+    // ,
+    // {
+    //     .name = "run_auto_test",
+    //     .func = i2c_run_auto_test,
+    //     .help = "Run auto test, usage: i2c run_auto_test",
+    // }
 };
 
 // Data structure passed to cmd module for console interaction.
@@ -900,6 +907,105 @@ static int32_t cmd_i2c_status(int32_t argc, const char** argv)
     }
     return 0;
 }
+
+// static int32_t i2c_run_auto_test(int32_t argc, const char** argv)
+// {
+//     enum i2c_instance_id instance_id = I2C_INSTANCE_3;
+//     static uint32_t test_state = 0;
+//     static uint32_t msg_len = 0;
+//     static uint8_t msg_bfr[7];
+//     int32_t rc;
+//     enum i2c_errors err;
+
+//     switch (test_state) {
+//         case 0:  // Reserve the I2C bus
+//             rc = i2c_reserve(instance_id);
+//             if (rc != 0) {
+//                 printc("ERROR: Reserve failed (rc=%ld)\n", (long)rc);
+//                 test_state = 0;  // Reset
+//                 return 1;  // Test failed
+//             }
+//             printc("RESERVED\n");
+//             test_state = 1;
+//             return 0;  // Continue
+
+//         case 1:  // Write command to sensor
+//             msg_bfr[0] = 0x2c;  // High repeatability measurement
+//             msg_bfr[1] = 0x06;
+//             rc = i2c_write(instance_id, 0x44, msg_bfr, 2);
+//             if (rc != 0) {
+//                 printc("ERROR: Write start failed (rc=%ld)\n", (long)rc);
+//                 i2c_release(instance_id);  // Cleanup
+//                 test_state = 0;  // Reset
+//                 return 1;  // Test failed
+//             }
+//             printc("WRITE\n");
+//             test_state = 2;
+//             return 0;  // Continue
+
+//         case 2:  // Wait for write to complete
+//             rc = i2c_get_op_status(instance_id);
+//             if (rc == MOD_ERR_OP_IN_PROG)
+//                 return 0;  // Still busy
+            
+//             // Check if write succeeded
+//             if (rc != 0) {
+//                 err = i2c_get_error(instance_id);
+//                 printc("ERROR: Write failed (rc=%ld, err=%d)\n", (long)rc, err);
+//                 i2c_release(instance_id);  // Cleanup
+//                 test_state = 0;  // Reset
+//                 return 1;  // Test failed
+//             }
+            
+//             test_state = 3;
+//             return 0;  // Continue
+
+//         case 3:  // Read temperature/humidity data
+//             msg_len = 6;  // temp(2) + CRC + hum(2) + CRC
+//             rc = i2c_read(instance_id, 0x44, msg_bfr, msg_len);
+//             if (rc != 0) {
+//                 printc("ERROR: Read start failed (rc=%ld)\n", (long)rc);
+//                 i2c_release(instance_id);  // Cleanup
+//                 test_state = 0;  // Reset
+//                 return 1;  // Test failed
+//             }
+//             printc("READ\n");
+//             test_state = 4;
+//             return 0;  // Continue
+
+//         case 4:  // Wait for read to complete
+//             rc = i2c_get_op_status(instance_id);
+//             if (rc == MOD_ERR_OP_IN_PROG)
+//                 return 0;  // Still busy
+            
+//             // Check if read succeeded
+//             if (rc != 0) {
+//                 err = i2c_get_error(instance_id);
+//                 printc("ERROR: Read failed (rc=%ld, err=%d)\n", (long)rc, err);
+//                 i2c_release(instance_id);  // Cleanup
+//                 test_state = 0;  // Reset
+//                 return 1;  // Test failed
+//             }
+            
+//             test_state = 5;
+//             return 0;  // Continue
+
+//         case 5:  // Release the bus
+//             rc = i2c_release(instance_id);
+//             if (rc != 0) {
+//                 printc("ERROR: Release failed (rc=%ld)\n", (long)rc);
+//                 test_state = 0;  // Reset
+//                 return 1;  // Test failed
+//             }
+//             printc("RELEASE - Test SUCCESS!\n");
+//             test_state = 0;  // Reset for next test
+//             return 1;  // Test complete
+
+//         default:
+//             test_state = 0;
+//             return 1;
+//     }
+// }
 
 /*
  * @brief Console command function for "i2c test".

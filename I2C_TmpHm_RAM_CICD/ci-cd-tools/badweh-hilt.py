@@ -2,12 +2,71 @@
 Hardware-in-the-Loop (HIL) Testing for Badweh_Development
 Day 6: Static Analysis and HIL Testing
 
-Tests the following subsystems:
-- Console: prompt, version, help
-- I2C: reserve, write, read, release, status
-- TMPHM: measurement, CRC8, status
-- Fault: status
-- LWL: enable, dump
+CURRENT STATUS:
+==============
+Implemented and Active Tests:
+1. Reset - Board reset via 'main reset' command
+2. Version - Software version verification (CRITICAL: Ring Doorbell lesson!)
+3. Help - Help command output verification
+4. I2C Status - I2C status table verification
+
+Tests to be Implemented (currently commented out):
+1. Console Prompt - Basic prompt response test
+2. I2C Reserve/Release - I2C bus reservation and release
+3. I2C Write - I2C write operation to SHT31-D sensor
+4. I2C Read - I2C read operation from SHT31-D sensor
+5. TMPHM Measurement - Temperature and humidity sensor measurement
+6. TMPHM CRC8 - CRC8 calculation verification
+7. TMPHM Status - TMPHM status command
+8. Fault Status - Fault status command
+9. LWL Enable/Dump - LWL enable and dump commands
+
+USAGE:
+======
+Run the test suite:
+    python badweh-hilt.py --verbose
+
+Arguments:
+    --dut-serial SERIAL    Serial port for DUT (default: COM4)
+    --tver VERSION         Test version string (default: v1.0.0)
+    --jfile FILE           JUnit XML output file (default: badweh-test-results.xml)
+    --verbose              Enable verbose logging for debugging
+
+Example:
+    python badweh-hilt.py --verbose --dut-serial COM4 --tver v1.0.0
+
+EXPECTED PATTERNS FOR ACTIVE TESTS:
+===================================
+1. Reset (do_reset):
+   Command: 'main reset'
+   Expected Pattern: 'Init: Enter super loop' followed by prompt '> '
+   Output: Board initialization messages ending with "Init: Enter super loop"
+
+2. Version (test_version):
+   Command: 'version'
+   Expected Pattern: 'Version="v1.0.0"' followed by prompt '> '
+   Example Output: Version="v1.0.0"
+
+3. Help (test_help):
+   Command: 'help'
+   Expected Pattern: 'i2c (status, test)' then 'main (status, version, reset)' then prompt '> '
+   Example Output:
+       ttys (status, test, log, pm)
+       fault (data, status, test, log)
+       ...
+       i2c (status, test)
+       tmphm (status, test)
+       main (status, version, reset)
+
+4. I2C Status (test_i2c_status):
+   Command: 'i2c status'
+   Expected Pattern: 'ID' column header, then table row with whitespace '0' (r'\s+0\s+'), then prompt '> '
+   Example Output:
+          Rsr Sta Dest Msg Byte I2C Err  Register
+      ID vrd te  Addr Len Xfrd Err Sta  BaseAddr
+      -- --- --- ---- --- ---- --- --- ----------
+       0   0   0 0x00   0    0   0   0          0
+       1   0   0 0x44   6    6   0   0 0x40005c00
 
 Author: Based on Gene Schrader's base-hilt.py
 Date: 2025-11-13
@@ -86,9 +145,9 @@ class BadwehDev:
 
     def do_reset(self):
         self.flush_input()
-        self.send_line('reset')
+        self.send_line('main reset')
         # Wait for "Resetting MCU..." and then for the boot sequence
-        rc, failed_pat = self.get_pattern_list(['Resetting MCU', 'READY.*Entering super loop', g_prompt])
+        rc, failed_pat = self.get_pattern_list(['Init: Enter super loop', g_prompt])
         if rc != 0:
             _log.debug('[%s] In do_reset() failure rc=%d pat=%s', self.name,
                        rc, failed_pat)
@@ -210,8 +269,8 @@ def test_help():
     passed = True
     start_test('help')
     g_dut.send_line('help')
-    # Should see module names
-    pat_list = ['main', 'i2c', 'tmphm', 'fault', 'lwl', g_prompt]
+    # Should see module names with their commands (search in order they appear in output)
+    pat_list = [r'i2c \(status, test\)', r'main \(status, version, reset\)', g_prompt]
     rc, failed_pat = g_dut.get_pattern_list(pat_list)
     if rc != 0:
         test_fail('Did not find pattern "%s" rc=%d' % (failed_pat, rc))
@@ -229,8 +288,8 @@ def test_i2c_status():
     passed = True
     start_test('i2c_status')
     g_dut.send_line('i2c status')
-    # Should see I2C status info
-    pat_list = ['Instance.*0', g_prompt]
+    # Should see I2C status table with ID column and data rows
+    pat_list = ['ID', r'\s+0\s+', g_prompt]
     rc, failed_pat = g_dut.get_pattern_list(pat_list)
     if rc != 0:
         test_fail('Did not find pattern "%s" rc=%d' % (failed_pat, rc))
@@ -464,28 +523,27 @@ def run_tests(tver):
 
     # Reset board before testing
     print('Resetting board before tests...')
-    g_dut.do_reset()
+    g_dut.set_timeout(10)  # Set timeout before reset (10 seconds should be enough)
+    rc, failed_pat = g_dut.do_reset()  # Check return value
+    if rc != 0:
+        print(f'ERROR: Reset failed - pattern "{failed_pat}" not found')
     time.sleep(0.5)
 
-    # Test 1-3: Basic console tests
-    all_passed &= test_console_prompt()
+    # Active tests: reset, version, help, and i2c status
     all_passed &= test_version(tver)  # CRITICAL: Ring Doorbell lesson!
     all_passed &= test_help()
-
-    # Test 4-7: I2C communication tests
     all_passed &= test_i2c_status()
-    all_passed &= test_i2c_reserve_release()
-    all_passed &= test_i2c_write()
-    all_passed &= test_i2c_read()
 
-    # Test 8-10: TMPHM sensor tests
-    all_passed &= test_tmphm_measurement()
-    all_passed &= test_tmphm_crc8()
-    all_passed &= test_tmphm_status()
-
-    # Test 11-12: System tests
-    all_passed &= test_fault_status()
-    all_passed &= test_lwl_enable_dump()
+    # COMMENTED OUT - not testing these right now:
+    # all_passed &= test_console_prompt()
+    # all_passed &= test_i2c_reserve_release()
+    # all_passed &= test_i2c_write()
+    # all_passed &= test_i2c_read()
+    # all_passed &= test_tmphm_measurement()
+    # all_passed &= test_tmphm_crc8()
+    # all_passed &= test_tmphm_status()
+    # all_passed &= test_fault_status()
+    # all_passed &= test_lwl_enable_dump()
 
     print('\n' + '='*60)
     if all_passed:

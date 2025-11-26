@@ -51,11 +51,16 @@
 // Common macros
 ////////////////////////////////////////////////////////////////////////////////
 
+#define APP_VERSION "v1.0.0"
+
+
 ////////////////////////////////////////////////////////////////////////////////
 // Private (static) function declarations
 ////////////////////////////////////////////////////////////////////////////////
 
 static int32_t cmd_main_status();
+static int32_t cmd_version(int32_t argc, const char** argv);
+static int32_t cmd_reset(int32_t argc, const char** argv);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Private (static) variables
@@ -67,6 +72,16 @@ static struct cmd_cmd_info cmds[] = {
         .func = cmd_main_status,
         .help = "Get main status, usage: main status [clear]",
     },
+	{
+		.name = "version",
+		.func = cmd_version,
+		.help = "Print firmware version, usage: version",
+	},
+	{
+		.name = "reset",
+		.func = cmd_reset,
+		.help = "Reset MCU, usage: reset",
+	}
 };
 
 static struct cmd_client_info cmd_info = {
@@ -146,12 +161,6 @@ void app_main(void)
     wdg_init_successful();
     wdg_start_hdw_wdg(CONFIG_WDG_HARD_TIMEOUT_MS);
 
-    printc("\n[READY] Entering super loop...\n");
-    printc("TMPHM running in background.\n");
-    printc("Console commands available:\n");
-    printc("  - tmphm status\n");
-    printc("  - tmphm test lastmeas 0\n");
-    printc("  - i2c status\n\n");
 
     while (1)
     {
@@ -198,4 +207,39 @@ static int32_t cmd_main_status(int32_t argc, const char** argv)
 
     }
     return 0;
+}
+
+
+/*
+ * @brief Version command - Outputs firmware version for HIL testing
+ *
+ * Critical for Ring Doorbell lesson: Always verify the build ID in automated
+ * tests to ensure you're testing the correct software version.
+ *
+ * Usage: version
+ * Output: Version="v1.0.0"
+ */
+static int32_t cmd_version(int32_t argc, const char** argv)
+{
+    printc("Version=\"%s\"\n", APP_VERSION);
+    return 0;
+}
+
+/*
+ * @brief Reset command - Resets the MCU
+ *
+ * This command resets the microcontroller. It prints a message and then
+ * calls NVIC_SystemReset() which will not return.
+ *
+ * Usage: reset
+ * Output: Resetting MCU...
+ */
+static int32_t cmd_reset(int32_t argc, const char** argv)
+{
+    printc("Resetting MCU...\n");
+    // Flush any pending output before reset
+    fflush(stdout);
+    // Reset the system - this function will not return
+    NVIC_SystemReset();
+    return 0; // This line will never be reached
 }
