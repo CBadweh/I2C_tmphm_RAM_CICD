@@ -26,9 +26,8 @@ pipeline {
         stage('Test') { 
             steps {
                 bat "python \"${TOOL_DIR}\\badweh-hilt.py\" --verbose"
-                // bat "python ${TOOL_DIR}\\badweh-hilt.py --dut-serial=$params.DUT_console --sim-serial=$params.SIM_console --tver=${BUILD_TAG}-Debug --jfile=test-results-debug.xml"
-                // junit 'test-results-debug.xml'
-                // bat "${TOOL_DIR}\\check-test-results.bat test-results-debug.xml"
+                junit 'test-results-debug.xml'
+                bat "\"${TOOL_DIR}\\check-test-results.bat\" test-results-debug.xml"
             }
         }
     }

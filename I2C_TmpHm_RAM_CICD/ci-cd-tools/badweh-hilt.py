@@ -9,17 +9,17 @@ Implemented and Active Tests:
 2. Version - Software version verification (CRITICAL: Ring Doorbell lesson!)
 3. Help - Help command output verification
 4. I2C Status - I2C status table verification
+5. TMPHM Measurement - Temperature and humidity sensor measurement
+6. TMPHM CRC8 - CRC8 calculation verification
+7. TMPHM Status - TMPHM status command
 
 Tests to be Implemented (currently commented out):
 1. Console Prompt - Basic prompt response test
 2. I2C Reserve/Release - I2C bus reservation and release
 3. I2C Write - I2C write operation to SHT31-D sensor
 4. I2C Read - I2C read operation from SHT31-D sensor
-5. TMPHM Measurement - Temperature and humidity sensor measurement
-6. TMPHM CRC8 - CRC8 calculation verification
-7. TMPHM Status - TMPHM status command
-8. Fault Status - Fault status command
-9. LWL Enable/Dump - LWL enable and dump commands
+5. Fault Status - Fault status command
+6. LWL Enable/Dump - LWL enable and dump commands
 
 USAGE:
 ======
@@ -67,6 +67,25 @@ EXPECTED PATTERNS FOR ACTIVE TESTS:
       -- --- --- ---- --- ---- --- --- ----------
        0   0   0 0x00   0    0   0   0          0
        1   0   0 0x44   6    6   0   0 0x40005c00
+
+5. TMPHM Measurement (test_tmphm_measurement):
+   Command: 'tmphm test lastmeas 0'
+   Expected Pattern: 'Temp=.*C', then 'Hum=.*%', then 'age=.*ms', then prompt '> '
+   Example Output: Temp=27.0 C Hum=47.4 % age=191 ms
+
+6. TMPHM CRC8 (test_tmphm_crc8):
+   Command: 'tmphm test crc8 0xBE 0xEF'
+   Expected Pattern: 'crc8: 0x92' then prompt '> '
+   Example Output: crc8: 0x92
+
+7. TMPHM Status (test_tmphm_status):
+   Command: 'tmphm status'
+   Expected Pattern: 'ID' column header, then table row with whitespace '0' (r'\s+0\s+'), then prompt '> '
+   Example Output:
+              Got  Last Last Meas Meas
+         ID State Meas Temp Hum  Age  Time
+         -- ----- ---- ---- ---- ---- ----
+          0     0    1  270  474   30   17
 
 Author: Based on Gene Schrader's base-hilt.py
 Date: 2025-11-13
@@ -403,16 +422,19 @@ def test_tmphm_measurement():
     """ Test TMPHM sensor measurement.
 
     The TMPHM module runs in background, taking measurements every second.
-    We just need to query the last measurement.
+    We need to wait for a measurement to be available before querying.
     """
 
     passed = True
-    start_test('tmphm_measurement', timeout=5)
+    start_test('tmphm_measurement', timeout=10)
+
+    # Wait for background measurement to complete (measurements happen every second)
+    time.sleep(1.5)
 
     # Query last measurement
     g_dut.send_line('tmphm test lastmeas 0')
     # Should see temperature and humidity readings
-    pat_list = [r'Temp=.*C', r'Hum=.*%', g_prompt]
+    pat_list = [r'Temp=.*C', r'Hum=.*%', r'age=.*ms', g_prompt]
     rc, failed_pat = g_dut.get_pattern_list(pat_list)
     if rc != 0:
         test_fail('Did not find pattern "%s" rc=%d' % (failed_pat, rc))
@@ -432,8 +454,8 @@ def test_tmphm_crc8():
 
     # Test CRC8 with known values (from SHT31-D datasheet example)
     # Data: 0xBE 0xEF, CRC should be 0x92
-    g_dut.send_line('tmphm test crc8 BE EF')
-    pat_list = [r'CRC8.*92', g_prompt]
+    g_dut.send_line('tmphm test crc8 0xBE 0xEF')
+    pat_list = [r'crc8: 0x92', g_prompt]
     rc, failed_pat = g_dut.get_pattern_list(pat_list)
     if rc != 0:
         test_fail('Did not find pattern "%s" rc=%d' % (failed_pat, rc))
@@ -453,7 +475,7 @@ def test_tmphm_status():
 
     g_dut.send_line('tmphm status')
     # Should see instance info
-    pat_list = ['Instance.*0', g_prompt]
+    pat_list = ['ID', r'\s+0\s+', g_prompt]
     rc, failed_pat = g_dut.get_pattern_list(pat_list)
     if rc != 0:
         test_fail('Did not find pattern "%s" rc=%d' % (failed_pat, rc))
@@ -539,9 +561,9 @@ def run_tests(tver):
     # all_passed &= test_i2c_reserve_release()
     # all_passed &= test_i2c_write()
     # all_passed &= test_i2c_read()
-    # all_passed &= test_tmphm_measurement()
-    # all_passed &= test_tmphm_crc8()
-    # all_passed &= test_tmphm_status()
+    all_passed &= test_tmphm_measurement()
+    all_passed &= test_tmphm_crc8()
+    all_passed &= test_tmphm_status()
     # all_passed &= test_fault_status()
     # all_passed &= test_lwl_enable_dump()
 
