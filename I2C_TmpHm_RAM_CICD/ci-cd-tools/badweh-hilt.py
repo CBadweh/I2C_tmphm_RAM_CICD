@@ -1,0 +1,549 @@
+"""
+Hardware-in-the-Loop (HIL) Testing for Badweh_Development
+Day 6: Static Analysis and HIL Testing
+
+Tests the following subsystems:
+- Console: prompt, version, help
+- I2C: reserve, write, read, release, status
+- TMPHM: measurement, CRC8, status
+- Fault: status
+- LWL: enable, dump
+
+Author: Based on Gene Schrader's base-hilt.py
+Date: 2025-11-13
+"""
+
+import argparse
+import junit_xml as jux
+import logging
+import pexpect as pex
+import pexpect.popen_spawn as pos
+import psutil
+import signal
+import sys
+import time
+
+_log = logging.getLogger()
+_log_handler = logging.StreamHandler(sys.stdout)
+_log.addHandler(_log_handler)
+_log.setLevel(logging.ERROR)
+
+g_dut = None
+g_test_name = None
+g_prompt = '> '
+g_test_junit = None
+g_test_junits = []
+
+################################################################################
+class BadwehDev:
+    """ This class represents the Badweh Development board via serial console. """
+
+    def __init__(self, name, serial_dev, baud_rate=115200):
+        self.name = name
+        _log.debug('[%s] Connecting to %s at %d', self.name, serial_dev,
+                   baud_rate)
+        self.console = pos.PopenSpawn('plink -serial %s -sercfg %d' %
+                                      (serial_dev, baud_rate))
+
+    def set_timeout(self, timeout):
+        self.console.timeout = timeout
+
+    def flush_input(self):
+        _log.debug('[%s] flush_input()', self.name)
+        while self.console.expect([pex.TIMEOUT, pex.EOF, '.*']) == 2:
+            if len(self.console.after) == 0:
+                break
+            _log.debug('[%s] In flush_input() got %s', self.name,
+                       self.console.after)
+
+    def send_line(self, msg):
+        _log.debug('[%s] Sending "%s"', self.name, msg)
+        self.console.sendline(msg)
+
+    def get_pattern_list(self, pattern_list):
+        """ Wait for a series of patterns from the device, with an arbitrary amount
+        of text allowed between the patterns.
+
+        pattern_list - a list of text strings (can be regex) to wait for, in order.
+        """
+
+        rc = 0
+        for pat in pattern_list:
+            rc = self.console.expect([pat, pex.TIMEOUT, pex.EOF])
+            if rc != 0:
+                _log.debug('[%s] In get_pattern_list() failure for "%s" (rc=%d) for test "%s"',
+                           self.name, pat, rc, g_test_name)
+                return rc, pat
+            _log.debug('[%s] Expecting "%s" got "%s%s"', self.name, pat,
+                       self.console.before, self.console.after)
+        return rc, None
+
+    def get_prompt(self):
+        rc, failed_pat = self.get_pattern_list([g_prompt])
+        if rc != 0:
+            _log.debug('[%s] In get_prompt() failure rc=%d', self.name, rc)
+        return rc
+
+    def do_reset(self):
+        self.flush_input()
+        self.send_line('reset')
+        # Wait for "Resetting MCU..." and then for the boot sequence
+        rc, failed_pat = self.get_pattern_list(['Resetting MCU', 'READY.*Entering super loop', g_prompt])
+        if rc != 0:
+            _log.debug('[%s] In do_reset() failure rc=%d pat=%s', self.name,
+                       rc, failed_pat)
+        return rc, failed_pat
+
+    def terminate(self):
+        if self.console is not None:
+            _log.debug('[%s] Killing', self.name)
+            try:
+                self.console.kill(signal.SIGTERM)
+            except Exception as e:
+                _log.debug('[%s] Exception on kill: %s', self.name, str(e))
+
+################################################################################
+def testing_init(dut_serial):
+    """ Initialize testing software. """
+
+    global g_dut
+
+    # Kill any existing plink processes for this serial port
+    kill_procs = []
+    for p in psutil.process_iter():
+        if p.name() == 'plink.exe':
+            if dut_serial.upper() in [s.upper() for s in p.cmdline()]:
+                kill_procs.append(p)
+
+    for p in kill_procs:
+        _log.debug('Killing process %s %s (pid=%d)', p.name(), p.cmdline(),
+                   p.pid)
+        p.kill()
+
+    g_dut = BadwehDev('dut', dut_serial)
+
+################################################################################
+def start_test(name, timeout=3):
+    """ Start a test, including recording the test name and junit object.
+
+    name - the name of the test
+    timeout - how long to wait for results.
+    """
+
+    global g_test_name
+    global g_test_junit
+
+    g_test_junit = jux.TestCase(name)
+    g_test_junits.append(g_test_junit)
+    g_test_name = name
+    _log.debug('Test "%s" starting', g_test_name)
+    g_dut.set_timeout(timeout)
+    g_dut.flush_input()
+
+################################################################################
+def test_fail(failure_info):
+    """ Handle a test failure, recording info and restarting the board.
+
+    failure_info - string describing how it failed.
+    """
+
+    _log.info('Test "%s" fails: %s', g_test_name, failure_info)
+    g_test_junit.add_failure_info(failure_info)
+
+    # After a test fail, try to reset the MCU to clean things up for the next test
+    g_dut.do_reset()
+
+################################################################################
+def test_pass():
+    """ Handle a test pass, recording info. """
+
+    _log.info('Test "%s" passes', g_test_name)
+    g_dut.flush_input()
+
+################################################################################
+# Test: console_prompt
+################################################################################
+def test_console_prompt():
+    """ Send a carriage return and wait for the console prompt. """
+
+    passed = True
+    start_test('console_prompt')
+    g_dut.send_line('')
+    rc = g_dut.get_prompt()
+    if rc != 0:
+        test_fail('Did not receive prompt rc=%d' % rc)
+        passed = False
+    else:
+        test_pass()
+    return passed
+
+################################################################################
+# Test: test_version (CRITICAL - Ring Doorbell lesson!)
+################################################################################
+def test_version(tver):
+    """ Test to verify the software version is as expected.
+
+    This is CRITICAL: Always verify build ID in tests to avoid shipping
+    untested software (Ring Doorbell lesson from Gene Schrader).
+
+    tver - the software version string.
+    """
+
+    passed = True
+    start_test('version')
+    g_dut.send_line('version')
+    pat_list = ['Version="' + tver + '"', g_prompt]
+    rc, failed_pat = g_dut.get_pattern_list(pat_list)
+    if rc != 0:
+        test_fail('Did not find pattern "%s" rc=%d' % (failed_pat, rc))
+        passed = False
+    else:
+        test_pass()
+    return passed
+
+################################################################################
+# Test: test_help
+################################################################################
+def test_help():
+    """ Test help command. """
+
+    passed = True
+    start_test('help')
+    g_dut.send_line('help')
+    # Should see module names
+    pat_list = ['main', 'i2c', 'tmphm', 'fault', 'lwl', g_prompt]
+    rc, failed_pat = g_dut.get_pattern_list(pat_list)
+    if rc != 0:
+        test_fail('Did not find pattern "%s" rc=%d' % (failed_pat, rc))
+        passed = False
+    else:
+        test_pass()
+    return passed
+
+################################################################################
+# Test: test_i2c_status
+################################################################################
+def test_i2c_status():
+    """ Test I2C status command. """
+
+    passed = True
+    start_test('i2c_status')
+    g_dut.send_line('i2c status')
+    # Should see I2C status info
+    pat_list = ['Instance.*0', g_prompt]
+    rc, failed_pat = g_dut.get_pattern_list(pat_list)
+    if rc != 0:
+        test_fail('Did not find pattern "%s" rc=%d' % (failed_pat, rc))
+        passed = False
+    else:
+        test_pass()
+    return passed
+
+################################################################################
+# Test: test_i2c_reserve_release
+################################################################################
+def test_i2c_reserve_release():
+    """ Test I2C bus reservation and release. """
+
+    passed = True
+    start_test('i2c_reserve_release', timeout=5)
+
+    # Reserve I2C bus
+    g_dut.send_line('i2c test reserve 0')
+    rc, failed_pat = g_dut.get_pattern_list(['OK', g_prompt])
+    if rc != 0:
+        test_fail('Reserve failed: pattern "%s" rc=%d' % (failed_pat, rc))
+        passed = False
+    else:
+        # Release I2C bus
+        g_dut.send_line('i2c test release 0')
+        rc, failed_pat = g_dut.get_pattern_list(['OK', g_prompt])
+        if rc != 0:
+            test_fail('Release failed: pattern "%s" rc=%d' % (failed_pat, rc))
+            passed = False
+        else:
+            test_pass()
+    return passed
+
+################################################################################
+# Test: test_i2c_write
+################################################################################
+def test_i2c_write():
+    """ Test I2C write operation to SHT31-D sensor. """
+
+    passed = True
+    start_test('i2c_write', timeout=5)
+
+    # Reserve I2C bus
+    g_dut.send_line('i2c test reserve 0')
+    rc, failed_pat = g_dut.get_pattern_list(['OK', g_prompt])
+    if rc != 0:
+        test_fail('Reserve failed: pattern "%s" rc=%d' % (failed_pat, rc))
+        passed = False
+    else:
+        # Write measurement command to sensor (address 0x44, command 0x2c 0x06)
+        g_dut.send_line('i2c test write 0 44 2c 06')
+        rc, failed_pat = g_dut.get_pattern_list(['OK', g_prompt])
+        if rc != 0:
+            test_fail('Write failed: pattern "%s" rc=%d' % (failed_pat, rc))
+            passed = False
+        else:
+            test_pass()
+
+        # Release I2C bus
+        g_dut.send_line('i2c test release 0')
+        g_dut.get_prompt()
+
+    return passed
+
+################################################################################
+# Test: test_i2c_read
+################################################################################
+def test_i2c_read():
+    """ Test I2C read operation from SHT31-D sensor. """
+
+    passed = True
+    start_test('i2c_read', timeout=5)
+
+    # Reserve I2C bus
+    g_dut.send_line('i2c test reserve 0')
+    rc, failed_pat = g_dut.get_pattern_list(['OK', g_prompt])
+    if rc != 0:
+        test_fail('Reserve failed: pattern "%s" rc=%d' % (failed_pat, rc))
+        passed = False
+    else:
+        # Write measurement command to sensor
+        g_dut.send_line('i2c test write 0 44 2c 06')
+        rc, failed_pat = g_dut.get_pattern_list(['OK', g_prompt])
+        if rc != 0:
+            test_fail('Write failed: pattern "%s" rc=%d' % (failed_pat, rc))
+            passed = False
+        else:
+            # Wait for measurement (20ms minimum for SHT31-D)
+            time.sleep(0.05)
+
+            # Read 6 bytes from sensor
+            g_dut.send_line('i2c test read 0 44 6')
+            rc, failed_pat = g_dut.get_pattern_list(['OK', g_prompt])
+            if rc != 0:
+                test_fail('Read failed: pattern "%s" rc=%d' % (failed_pat, rc))
+                passed = False
+            else:
+                test_pass()
+
+        # Release I2C bus
+        g_dut.send_line('i2c test release 0')
+        g_dut.get_prompt()
+
+    return passed
+
+################################################################################
+# Test: test_tmphm_measurement
+################################################################################
+def test_tmphm_measurement():
+    """ Test TMPHM sensor measurement.
+
+    The TMPHM module runs in background, taking measurements every second.
+    We just need to query the last measurement.
+    """
+
+    passed = True
+    start_test('tmphm_measurement', timeout=5)
+
+    # Query last measurement
+    g_dut.send_line('tmphm test lastmeas 0')
+    # Should see temperature and humidity readings
+    pat_list = [r'Temp=.*C', r'Hum=.*%', g_prompt]
+    rc, failed_pat = g_dut.get_pattern_list(pat_list)
+    if rc != 0:
+        test_fail('Did not find pattern "%s" rc=%d' % (failed_pat, rc))
+        passed = False
+    else:
+        test_pass()
+    return passed
+
+################################################################################
+# Test: test_tmphm_crc8
+################################################################################
+def test_tmphm_crc8():
+    """ Test TMPHM CRC8 calculation. """
+
+    passed = True
+    start_test('tmphm_crc8', timeout=5)
+
+    # Test CRC8 with known values (from SHT31-D datasheet example)
+    # Data: 0xBE 0xEF, CRC should be 0x92
+    g_dut.send_line('tmphm test crc8 BE EF')
+    pat_list = [r'CRC8.*92', g_prompt]
+    rc, failed_pat = g_dut.get_pattern_list(pat_list)
+    if rc != 0:
+        test_fail('Did not find pattern "%s" rc=%d' % (failed_pat, rc))
+        passed = False
+    else:
+        test_pass()
+    return passed
+
+################################################################################
+# Test: test_tmphm_status
+################################################################################
+def test_tmphm_status():
+    """ Test TMPHM status command. """
+
+    passed = True
+    start_test('tmphm_status', timeout=5)
+
+    g_dut.send_line('tmphm status')
+    # Should see instance info
+    pat_list = ['Instance.*0', g_prompt]
+    rc, failed_pat = g_dut.get_pattern_list(pat_list)
+    if rc != 0:
+        test_fail('Did not find pattern "%s" rc=%d' % (failed_pat, rc))
+        passed = False
+    else:
+        test_pass()
+    return passed
+
+################################################################################
+# Test: test_fault_status
+################################################################################
+def test_fault_status():
+    """ Test fault status command. """
+
+    passed = True
+    start_test('fault_status', timeout=5)
+
+    g_dut.send_line('fault status')
+    # Should see stack info and MPU status
+    pat_list = ['Stack.*bytes', 'MPU', g_prompt]
+    rc, failed_pat = g_dut.get_pattern_list(pat_list)
+    if rc != 0:
+        test_fail('Did not find pattern "%s" rc=%d' % (failed_pat, rc))
+        passed = False
+    else:
+        test_pass()
+    return passed
+
+################################################################################
+# Test: test_lwl_enable_dump
+################################################################################
+def test_lwl_enable_dump():
+    """ Test LWL enable and dump commands. """
+
+    passed = True
+    start_test('lwl_enable_dump', timeout=5)
+
+    # Enable LWL (should already be enabled, but confirm)
+    g_dut.send_line('lwl enable 1')
+    rc, failed_pat = g_dut.get_pattern_list(['OK', g_prompt])
+    if rc != 0:
+        test_fail('Enable failed: pattern "%s" rc=%d' % (failed_pat, rc))
+        passed = False
+    else:
+        # Dump LWL buffer
+        g_dut.send_line('lwl dump')
+        rc, failed_pat = g_dut.get_pattern_list(['LWL', g_prompt])
+        if rc != 0:
+            test_fail('Dump failed: pattern "%s" rc=%d' % (failed_pat, rc))
+            passed = False
+        else:
+            test_pass()
+    return passed
+
+################################################################################
+# Main test runner
+################################################################################
+def run_tests(tver):
+    """ Run all HIL tests. """
+
+    all_passed = True
+
+    print('\n' + '='*60)
+    print('Badweh Development HIL Test Suite')
+    print('Day 6: Static Analysis and HIL Testing')
+    print('='*60 + '\n')
+
+    # Reset board before testing
+    print('Resetting board before tests...')
+    g_dut.do_reset()
+    time.sleep(0.5)
+
+    # Test 1-3: Basic console tests
+    all_passed &= test_console_prompt()
+    all_passed &= test_version(tver)  # CRITICAL: Ring Doorbell lesson!
+    all_passed &= test_help()
+
+    # Test 4-7: I2C communication tests
+    all_passed &= test_i2c_status()
+    all_passed &= test_i2c_reserve_release()
+    all_passed &= test_i2c_write()
+    all_passed &= test_i2c_read()
+
+    # Test 8-10: TMPHM sensor tests
+    all_passed &= test_tmphm_measurement()
+    all_passed &= test_tmphm_crc8()
+    all_passed &= test_tmphm_status()
+
+    # Test 11-12: System tests
+    all_passed &= test_fault_status()
+    all_passed &= test_lwl_enable_dump()
+
+    print('\n' + '='*60)
+    if all_passed:
+        print('All tests PASSED')
+    else:
+        print('Some tests FAILED - check results above')
+    print('='*60 + '\n')
+
+    return all_passed
+
+################################################################################
+# Entry point
+################################################################################
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Badweh Development HIL Tests')
+    parser.add_argument('--dut-serial', default='COM4',
+                        help='Serial port for DUT (default: COM4)')
+    parser.add_argument('--tver', default='v1.0.0',
+                        help='Test version string (default: v1.0.0)')
+    parser.add_argument('--jfile', default='badweh-test-results.xml',
+                        help='JUnit XML output file (default: badweh-test-results.xml)')
+    parser.add_argument('--verbose', action='store_true',
+                        help='Enable verbose logging')
+
+    args = parser.parse_args()
+
+    if args.verbose:
+        _log.setLevel(logging.DEBUG)
+
+    print('Badweh HIL Testing')
+    print('  DUT Serial: %s' % args.dut_serial)
+    print('  Test Version: %s' % args.tver)
+    print('  JUnit File: %s' % args.jfile)
+
+    try:
+        testing_init(args.dut_serial)
+        all_passed = run_tests(args.tver)
+
+        # Generate JUnit XML
+        test_suite = jux.TestSuite('Badweh HIL Tests', g_test_junits)
+        with open(args.jfile, 'w') as f:
+            jux.TestSuite.to_file(f, [test_suite], prettyprint=True)
+
+        print('\nJUnit XML written to: %s' % args.jfile)
+
+        # Return appropriate exit code for CI/CD
+        sys.exit(0 if all_passed else 1)
+
+    except KeyboardInterrupt:
+        print('\nInterrupted by user')
+        sys.exit(1)
+
+    except Exception as e:
+        print('\nFatal error: %s' % str(e))
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+    finally:
+        if g_dut is not None:
+            g_dut.terminate()
