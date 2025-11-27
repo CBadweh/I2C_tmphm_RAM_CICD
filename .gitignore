@@ -265,3 +265,5 @@ I2C_TmpHm_RAM_CICD/.cproject
 I2C_TmpHm_RAM_CICD/.project
 I2C_TmpHm_RAM_CICD/.classpath
 I2C_TmpHm_RAM_CICD/.mxproject
+
+.cursor/rules/
