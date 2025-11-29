@@ -773,5 +773,289 @@ C:/repos/project.git/hooks/post-update
 
 ---
 
+## **Appendix: RAM Techniques Classification Guide**
+
+### Understanding RAM in Context
+
+The RAM (Reliability, Availability, Maintainability) course from Gene Schrader focuses on **runtime techniques for deployed embedded systems**. This differs from general software engineering practices that prevent bugs during development. Both are essential for production systems.
+
+**Core Philosophy:**
+> "Systems with complexity will almost always have bugs. Products ship with known non-serious bugs. Unknown bugs are the real concern. This course assumes failures WILL occur and focuses on detecting, recording, and recovering from them."
+
+---
+
+### Reliability Techniques - What Qualifies?
+
+**RAM Course Definition:** "Ability to function without failure"
+
+**Course Approach:** Assumes failures will occur → Focus on detection and recovery
+
+#### ✅ **Covered by RAM Course:**
+
+1. **Defensive Programming** ✅ (Lesson 2 - Core Concept)
+   - Validate all inputs and check assumptions
+   - Handle unexpected/wrong behavior reasonably
+   - "Weaknesses in defensive programming ARE bugs"
+   - Example from course:
+   ```c
+   if (data == NULL || len == 0 || len > MAX_SIZE) {
+       return ERR_INVALID_PARAM;
+   }
+   ```
+
+2. **Watchdog Timers** ✅ (Lesson 5 - Entire Lesson)
+   - Software watchdogs monitor critical work completion
+   - Hardware watchdog as backup for software watchdog system
+   - Key principle: "Ensure critical work is DONE, not just code executing"
+   - Hierarchical protection (software checks work, hardware checks software)
+
+3. **Memory Protection Units (MPU)** ✅ (Lesson 6 - Stack Guard)
+   - 32-byte read-only guard region below stack
+   - Triggers MemManage fault on stack overflow
+   - Prevents silent memory corruption
+   - Provides immediate detection and safe reset
+
+4. **Fault Detection Mechanisms** ✅ (Lesson 4)
+   - CPU exceptions (HardFault, MemManage, UsageFault)
+   - Watchdog triggers
+   - Application-level data integrity checks
+   - "Worst field events: system malfunctioning but doesn't know it"
+
+#### ⚠️ **Implied but Not Directly Covered:**
+
+1. **CRC/Checksums**
+   - Course uses CRC-8 for sensor data validation
+   - Not emphasized as general RAM technique
+   - Falls under application-level data integrity
+
+2. **Avoid Dynamic Memory Allocation**
+   - Course uses static allocation throughout
+   - Not explicitly stated as requirement
+   - Aligns with embedded best practices
+
+3. **Concurrency Control (Mutexes/Semaphores)**
+   - Course uses bare metal (no RTOS)
+   - Uses critical sections instead: `__disable_irq()` / `__enable_irq()`
+   - Simpler approach for interrupt-based concurrency
+
+#### ❌ **NOT Covered - General Software Engineering:**
+
+These are **development-time** reliability practices (prevent bugs before they exist):
+
+1. **Unit/Integration Testing Frameworks**
+   - Course provides console test commands
+   - But not automated test suites like GoogleTest/Unity
+   - **Why**: Focus is runtime diagnostics, not development testing
+
+2. **Code Reviews**
+   - Excellent practice, but not part of RAM theory
+   - Assumed as standard development practice
+
+3. **Error Handling (try-catch blocks)**
+   - Higher-level software pattern
+   - C doesn't have exceptions
+   - Course uses fault detection → data collection → reset
+
+4. **Incremental Development / CI/CD**
+   - Development methodology, not runtime reliability
+   - CI/CD covered separately as automation topic
+
+---
+
+### Maintainability Techniques - What Qualifies?
+
+**RAM Course Definition (Two Perspectives):**
+1. **Customer viewpoint:** Tools to diagnose configuration/installation/hardware problems
+2. **Developer viewpoint:** Tools to diagnose and fix software bugs
+
+**Course Focus:** Runtime features that help diagnose problems in deployed systems
+
+#### ✅ **Covered by RAM Course:**
+
+1. **Lightweight Logging (LWL)** ✅ (Lesson 3 - Entire Lesson)
+   - Flight recorder for embedded systems
+   - Circular buffer in RAM with minimal overhead
+   - No runtime string formatting (offline Python tool decodes)
+   - "Never know when you want logs - ideal is to always have them"
+   - Critical for post-fault analysis
+
+2. **Fault Data Collection** ✅ (Lesson 4)
+   - Saves fault type, registers, stack pointer to flash
+   - Includes LWL buffer showing pre-fault activity
+   - Flash storage persists across resets
+   - Python tool formats raw binary data
+
+3. **Console Debug Interface** ✅ (Throughout Course)
+   - Every module provides test commands
+   - "Window into system" for field debugging
+   - Examples: `fault status`, `wdg status`, `lwl dump`
+
+4. **Performance Measurements** ✅ (Lesson 2 - Mentioned)
+   - Counters for unusual events
+   - Alarms displayed via console
+   - Track system health metrics
+
+5. **Modularity and Standard API** ✅ (Throughout Course)
+   - All modules: `init()`, `start()`, `run()`
+   - Consistent interface reduces learning curve
+   - Easier to isolate, test, fix components
+
+#### ✅ **General Software Engineering (Also Maintainability):**
+
+1. **Coding Standards and Readability**
+   - Course demonstrates through consistent patterns
+   - Clear naming, well-commented assembly handlers
+   - Makes code easier to understand and modify
+
+2. **Automated Testing**
+   - Course includes console test commands for all modules
+   - HIL testing with Python validates functionality
+   - Provides safety net for future changes
+
+3. **Code Reviews and Refactoring**
+   - Not explicitly covered, but implied in professional practice
+   - "Ease with which problems can be corrected"
+
+4. **Version Control (Git)**
+   - Course uses GitHub for source code
+   - Track changes, identify when bugs introduced
+   - Essential for team collaboration
+
+---
+
+### The Critical Distinction
+
+#### **Your Typical Software Engineering List:**
+- **Prevents** bugs during development
+- **Proactive** approach
+- Examples: Unit tests, code reviews, CI/CD, incremental development
+
+#### **RAM Course Focus:**
+- **Detects and recovers from** bugs in deployed systems
+- **Reactive** approach
+- Examples: Watchdogs, fault handlers, logging, automatic reset
+
+#### **Both Are Essential:**
+
+```
+Good Development Practices (Your List)
+            ↓
+      Fewer Bugs Shipped
+            ↓
+    But Bugs Still Exist (Inevitable)
+            ↓
+  RAM Techniques (Course Focus)
+            ↓
+Detect → Record → Recover → Maintain High Availability
+```
+
+---
+
+### Quick Reference: Technique Classification
+
+| Technique | RAM Course? | Category | Why/Why Not |
+|-----------|------------|----------|-------------|
+| **RELIABILITY** ||||
+| Defensive Programming | ✅ Yes | Reliability | Lesson 2 - Core concept |
+| Watchdog Timers | ✅ Yes | Reliability/Availability | Lesson 5 - Entire lesson |
+| Memory Protection (MPU) | ✅ Yes | Reliability | Lesson 6 - Stack guard |
+| Fault Detection | ✅ Yes | Reliability | Lesson 4 - Comprehensive |
+| CRC/Checksums | ⚠️ Implied | Reliability | Used but not emphasized |
+| Avoid Dynamic Allocation | ⚠️ Implied | Reliability | Practice not mandate |
+| Mutex/Semaphore | ⚠️ Different | Reliability | Uses critical sections |
+| Unit Testing Frameworks | ❌ No | Dev Practice | Not runtime feature |
+| Code Reviews | ❌ No | Dev Practice | Assumed baseline |
+| CI/CD Pipelines | ❌ No | Dev Practice | Separate topic |
+| **MAINTAINABILITY** ||||
+| Lightweight Logging | ✅ Yes | Maintainability | Lesson 3 - Flight recorder |
+| Fault Data Storage | ✅ Yes | Maintainability | Lesson 4 - Flash storage |
+| Console Commands | ✅ Yes | Maintainability | All modules |
+| Performance Counters | ✅ Yes | Maintainability | Lesson 2 |
+| Modularity | ✅ Yes | Maintainability | Demonstrated throughout |
+| Coding Standards | ✅ Yes | Maintainability | Good practice shown |
+| Version Control | ✅ Yes | Maintainability | Git usage throughout |
+
+---
+
+### Practical Application Guide
+
+**When Building Production Embedded Systems:**
+
+1. **Development Phase (Prevent Bugs):**
+   - ✅ Use version control (Git)
+   - ✅ Follow coding standards
+   - ✅ Write unit tests where practical
+   - ✅ Conduct code reviews
+   - ✅ Use static analysis (Cppcheck)
+   - ✅ Implement CI/CD automation
+
+2. **Runtime Design (Detect & Recover from Bugs):**
+   - ✅ Add defensive programming (input validation)
+   - ✅ Implement watchdog system (software + hardware)
+   - ✅ Enable lightweight logging (flight recorder)
+   - ✅ Add fault handling with flash storage
+   - ✅ Configure MPU for stack guard
+   - ✅ Create console debug interface
+
+3. **Field Deployment (Maintain & Diagnose):**
+   - ✅ Logging enabled by default
+   - ✅ Fault data preserved in flash
+   - ✅ Automatic recovery (reset on fault)
+   - ✅ Console access for field diagnostics
+   - ✅ Version tracking in firmware
+
+**The Complete Picture:**
+```
+Good Development → Fewer Bugs → RAM Techniques → High Uptime & Easy Diagnosis
+```
+
+---
+
+### Gene Schrader's Key Insights
+
+**On Reliability:**
+> "Bugs are inevitable in complex systems. New features produce new bugs. Bug fixes sometimes create new bugs. Products ship with known non-serious bugs. Unknown bugs are the real concern."
+
+**On Watchdogs:**
+> "Watchdogs ensure critical work is DONE, not just that code is EXECUTING. Monitor outcomes, not activity."
+
+**On Maintainability:**
+> "Lightweight logging is a flight recorder. Never know when you want logs - ideal is to always have them."
+
+**On Field vs Lab:**
+> "Field conditions are much more complex than test labs. What works in development may trigger unexpected behaviors in production."
+
+**On Stack Overflow:**
+> "Stack overflow is a nasty problem. Developers spend considerable time before realizing it's the issue. System exhibits 'weird' behavior - very confusing to debug."
+
+**On Fault Handling:**
+> "Worst field events: system malfunctioning but doesn't know it. Detection is the first step in any recovery strategy."
+
+---
+
+### Summary
+
+**What Makes Code "Production-Ready"?**
+
+1. **NOT just absence of bugs** (impossible to achieve)
+2. **BUT system's ability to:**
+   - Detect when something goes wrong
+   - Record diagnostic information
+   - Recover automatically when safe
+   - Provide tools for field diagnosis
+
+**RAM Techniques ≠ All Software Engineering Best Practices**
+
+- RAM focuses on **runtime resilience** in deployed systems
+- Assumes you're already doing good development practices
+- Adds the **field-grade features** that separate university projects from products
+
+**Both Perspectives Are Essential:**
+- Development practices prevent bugs (**proactive**)
+- RAM techniques handle bugs that slip through (**reactive**)
+- Together they create truly robust embedded systems
+
+---
+
 **End of Lesson Plan**
 
