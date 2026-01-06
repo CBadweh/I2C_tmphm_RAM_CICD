@@ -470,8 +470,8 @@ void SysTick_Handler(void)
         LWL("Uptime seconds %u", 4, LWL_4(uptime_ctr_sec));
     }
 
-    if ((tick_ms_ctr % 100) == 0)
-        LWL("Tick 100 ms", 0);
+//    if ((tick_ms_ctr % 100) == 0)
+//        LWL("Tick 100 ms", 0);
 
     for (idx = 0; idx < TMR_NUM_INST; idx++) {
         struct tmr_inst_info* ti = &tmrs[idx];

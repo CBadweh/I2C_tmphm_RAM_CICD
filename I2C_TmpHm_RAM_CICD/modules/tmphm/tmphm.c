@@ -280,7 +280,7 @@ int32_t tmphm_run(enum tmphm_instance_id instance_id)
                     st->i2c_op_start_ms = tmr_get_ms();
                     st->state = STATE_WAIT_MEAS;
                 } else {
-                    LWL("i2c_get_op_status() for tmphm fails rc=%d", 4, LWL_4(rc));
+//                    LWL("i2c_get_op_status() for tmphm fails rc=%d", 4, LWL_4(rc));
                     i2c_release(st->cfg.i2c_instance_id);
                     st->state = STATE_IDLE;
                 }
@@ -294,7 +294,7 @@ int32_t tmphm_run(enum tmphm_instance_id instance_id)
                 if (rc == 0) {
                     st->state = STATE_READ_MEAS_VALUE;
                 } else {
-                    LWL("i2c_read() for tmphm fails rc=%d", 4, LWL_4(rc));
+//                    LWL("i2c_read() for tmphm fails rc=%d", 4, LWL_4(rc));
                     i2c_release(st->cfg.i2c_instance_id);
                     st->state = STATE_IDLE;
                 }
@@ -313,7 +313,7 @@ int32_t tmphm_run(enum tmphm_instance_id instance_id)
                         printc("CNT_CRC_FAIL");
 
                     } else {
-                        LWL("Got good tmphm measurement", 0);
+//                        LWL("Got good tmphm measurement", 0);
                         wdg_feed(CONFIG_TMPHM_WDG_ID);
                         int32_t temp = (msg[0] << 8) + msg[1];
                         uint32_t hum = (msg[3] << 8) + msg[4];
@@ -327,7 +327,7 @@ int32_t tmphm_run(enum tmphm_instance_id instance_id)
                     }
                     
                 } else {
-                    LWL("i2c_get_op_status() for tmphm fails rc=%d", 4, LWL_4(rc));
+//                    LWL("i2c_get_op_status() for tmphm fails rc=%d", 4, LWL_4(rc));
                     printc("CNT_READ_OP_FAIL");
                 }
                 i2c_release(st->cfg.i2c_instance_id);
@@ -384,10 +384,11 @@ static enum tmr_cb_action tmr_callback(int32_t tmr_id, uint32_t user_data)
     st = &tmphm_states[instance_id];
     if (st->state == STATE_IDLE) {
         st->state = STATE_RESERVE_I2C;
-        LWL("Start tmphm measurement", 0);
-    } else {
-        LWL("Start tmphm measurement fails due to state %d", 1, LWL_1(st->state));
+//        LWL("Start tmphm measurement", 0);
     }
+//    else {
+//        LWL("Start tmphm measurement fails due to state %d", 1, LWL_1(st->state));
+//    }
     return TMR_CB_RESTART;
 }
 

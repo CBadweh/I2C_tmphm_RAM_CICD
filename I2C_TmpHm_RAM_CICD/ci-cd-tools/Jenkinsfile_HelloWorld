@@ -6,9 +6,9 @@ pipeline {
     }
 
     stages {
-        stage('Hello') {
+        stage('Hello C') {
             steps {
-                echo 'Hello World.'
+                echo 'Hello World C.'
             }
         }
         stage('Build') {
@@ -25,9 +25,9 @@ pipeline {
         }
         stage('Test') { 
             steps {
-                bat "python \"${TOOL_DIR}\\badweh-hilt.py\" --verbose"
-                junit 'badweh-test-results.xml'
-                bat "\"${TOOL_DIR}\\check-test-results.bat\" badweh-test-results.xml"
+                bat "python \"${TOOL_DIR}\\MBC_HIL_Full_Suit_Advanced.py\" "
+                junit 'test-results.xml'
+                // bat "\"${TOOL_DIR}\\check-test-results.bat\" badweh-test-results.xml"
             }
         }
     }

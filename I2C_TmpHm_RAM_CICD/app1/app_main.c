@@ -157,7 +157,7 @@ void app_main(void)
 
     cmd_register(&cmd_info);
 
-    printc("Init: Enter super loop\n");
+    printc("Init: Enter super loop :P\n");
     wdg_init_successful();
     wdg_start_hdw_wdg(CONFIG_WDG_HARD_TIMEOUT_MS);
 

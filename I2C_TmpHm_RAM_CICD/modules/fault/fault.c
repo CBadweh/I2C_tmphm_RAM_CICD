@@ -163,13 +163,42 @@ _Static_assert((sizeof(struct end_marker) % CONFIG_FLASH_WRITE_BYTES) == 0,
 ////////////////////////////////////////////////////////////////////////////////
 
 static void fault_common_handler(void);
-static void record_fault_data(uint32_t data_offset, uint8_t* addr,
-                              uint32_t num_bytes);
+// static void record_fault_data(uint32_t data_offset, uint8_t* addr,
+//                               uint32_t num_bytes);
 static void wdg_triggered_handler(uint32_t wdg_client_id);
 static int32_t cmd_fault_data(int32_t argc, const char** argv);
 static int32_t cmd_fault_status(int32_t argc, const char** argv);
 static int32_t cmd_fault_test(int32_t argc, const char** argv);
 static void test_overflow_stack(void);
+
+////////////////////////////////////////////////////////////////////////////////
+// Private macros for inlined flash operations (STM32F401xE specific)
+////////////////////////////////////////////////////////////////////////////////
+
+// Error mask for STM32F401xE
+#define FAULT_FLASH_ERR_MASK (FLASH_SR_WRPERR_Msk |  \
+                             FLASH_SR_PGAERR_Msk |    \
+                             FLASH_SR_PGPERR_Msk |  \
+                             FLASH_SR_PGSERR_Msk |   \
+                             FLASH_SR_RDERR_Msk)
+
+// Command mask for clearing command bits
+#define FAULT_FLASH_CR_CMD_MASK (FLASH_CR_ERRIE_Msk |   \
+                                 FLASH_CR_EOPIE_Msk |   \
+                                 FLASH_CR_MER_Msk |     \
+                                 FLASH_CR_SER_Msk |     \
+                                 FLASH_CR_PG_Msk)
+
+// Write alignment mask
+#define FAULT_FLASH_WRITE_BYTES_MASK (CONFIG_FLASH_WRITE_BYTES - 1)
+
+// Flash unlock keys
+#define FAULT_FLASH_KEY1 0x45670123U
+#define FAULT_FLASH_KEY2 0xCDEF89ABU
+
+// Register shortcuts
+#define FAULT_FLASH_CR FLASH->CR
+#define FAULT_FLASH_SR FLASH->SR
 
 ////////////////////////////////////////////////////////////////////////////////
 // Private (static) variables
@@ -448,26 +477,20 @@ void fault_detected(enum fault_type fault_type, uint32_t fault_param)
  */
 void fault_exception_handler(uint32_t sp)
 {
-    // Panic mode.
-    CRIT_START();
-    wdg_feed_hdw();
-
-    // Disable MPU to avoid another fault (shouldn't be necessary)
-    ARM_MPU_Disable();
-
     // Start to collect fault data.
     fault_data_buf.fault_type = FAULT_TYPE_EXCEPTION;
-    fault_data_buf.fault_param = __get_IPSR();
-    __ASM volatile("MOV  %0, lr" : "=r" (fault_data_buf.lr) : : "memory");
+    fault_data_buf.fault_param = __get_IPSR(); //  identifies which exception occurred
+    __ASM volatile("MOV  %0, lr" : "=r" (fault_data_buf.lr) : : "memory"); // lr is the return address
     fault_data_buf.sp = sp;
 
-    if (((sp & 0x7) == 0) &&
-        (sp >= (uint32_t)&_sdata) &&
-        ((sp + EXCPT_STK_BYTES + 4) <= (uint32_t)&_estack)) {
+    // Try to copy exception stack frame (simplified validation)
+    if (sp >= (uint32_t)&_sdata && 
+        (sp + EXCPT_STK_BYTES) <= (uint32_t)&_estack) {
         memcpy(&fault_data_buf.excpt_stk_r0, (uint8_t*)sp, EXCPT_STK_BYTES);
     } else {
         memset(&fault_data_buf.excpt_stk_r0, 0, EXCPT_STK_BYTES);
     }
+    
     fault_common_handler();
 }
 
@@ -495,39 +518,107 @@ static void fault_common_handler()
     uint8_t* lwl_data;
     uint32_t lwl_num_bytes;
     struct end_marker end;
+    const int bytes_per_line = 32;
+    uint32_t line_byte_ctr = 0;
+    uint32_t idx;
+    uint32_t data_offset;
+    uint8_t* data_addr;
+    uint32_t num_bytes;
 
+    // Step 1: Disable lightweight logging (we're about to save it)
     lwl_enable(false);
+    
+    // Step 2: Print fault info to console
     printc_panic("\nFault type=%lu param=%lu\n", fault_data_buf.fault_type,
                  fault_data_buf.fault_param);
 
-    // Populate data buffer and then record it.
+    // Step 3: Populate the fault data structure with MCU register values
     fault_data_buf.magic = MOD_MAGIC_FAULT;
     fault_data_buf.num_section_bytes = sizeof(fault_data_buf);
-    fault_data_buf.ipsr = __get_IPSR();
-    fault_data_buf.icsr = SCB->ICSR;
-    fault_data_buf.shcsr =  SCB->SHCSR;
-    fault_data_buf.cfsr =  SCB->CFSR;
-    fault_data_buf.hfsr =  SCB->HFSR;
-    fault_data_buf.mmfar =  SCB->MMFAR;
-    fault_data_buf.bfar =  SCB->BFAR;
-    fault_data_buf.tick_ms = tmr_get_ms();
+    fault_data_buf.ipsr = __get_IPSR();           // Interrupt Program Status Register
+    fault_data_buf.icsr = SCB->ICSR;              // Interrupt Control State Register
+    fault_data_buf.shcsr = SCB->SHCSR;            // System Handler Control State Register
+    fault_data_buf.cfsr = SCB->CFSR;              // Configurable Fault Status Register
+    fault_data_buf.hfsr = SCB->HFSR;              // Hard Fault Status Register
+    fault_data_buf.mmfar = SCB->MMFAR;            // MemManage Fault Address Register
+    fault_data_buf.bfar = SCB->BFAR;              // Bus Fault Address Register
+    fault_data_buf.tick_ms = tmr_get_ms();        // Timestamp
 
-    // Record the MCU data.
-    record_fault_data(0, (uint8_t*)&fault_data_buf, sizeof(fault_data_buf));
+    // ========================================================================
+    // Print MCU fault data to console in hex dump format
+    // ========================================================================
+    data_offset = 0;
+    data_addr = (uint8_t*)&fault_data_buf;
+    num_bytes = sizeof(fault_data_buf);
 
-    // Record the LWL buffer.
+    // Print fault data to console in hex dump format
+    for (idx = 0; idx < num_bytes; idx++) {
+        if (line_byte_ctr == 0)
+            printc_panic("%08x: ", (unsigned int)data_offset);
+        printc_panic("%02x", (unsigned)*data_addr++);
+        data_offset++;
+        if (++line_byte_ctr >= bytes_per_line) {
+            printc_panic("\n");
+            line_byte_ctr = 0;
+        }
+    }
+    if (line_byte_ctr != 0)
+        printc_panic("\n");
+    // ========================================================================
+
+    // ========================================================================
+    // Print LWL (Lightweight Log) buffer to console
+    // ========================================================================
+    // Get the LWL buffer (contains runtime log entries)
     lwl_data = lwl_get_buffer(&lwl_num_bytes);
-    record_fault_data(sizeof(fault_data_buf), lwl_data, lwl_num_bytes);
+    
+    data_offset = sizeof(fault_data_buf);  // Continue after fault data
+    data_addr = lwl_data;
+    num_bytes = lwl_num_bytes;
 
-    // Record end marker.
+    // Print LWL data to console
+    for (idx = 0; idx < num_bytes; idx++) {
+        if (line_byte_ctr == 0)
+            printc_panic("%08x: ", (unsigned int)data_offset);
+        printc_panic("%02x", (unsigned)*data_addr++);
+        data_offset++;
+        if (++line_byte_ctr >= bytes_per_line) {
+            printc_panic("\n");
+            line_byte_ctr = 0;
+        }
+    }
+    if (line_byte_ctr != 0)
+        printc_panic("\n");
+    // ========================================================================
+
+    // ========================================================================
+    // Print end marker to console
+    // ========================================================================
+    // Create end marker to indicate end of fault log
     memset(&end, 0, sizeof(end));
     end.magic = MOD_MAGIC_END;
     end.num_section_bytes = sizeof(end);
 
-    record_fault_data(sizeof(fault_data_buf) + lwl_num_bytes, (uint8_t*)&end,
-                      sizeof(end));
+    data_offset = sizeof(fault_data_buf) + lwl_num_bytes;  // Continue after LWL
+    data_addr = (uint8_t*)&end;
+    num_bytes = sizeof(end);
 
-    // Reset system - this function will not return.
+    // Print end marker to console
+    for (idx = 0; idx < num_bytes; idx++) {
+        if (line_byte_ctr == 0)
+            printc_panic("%08x: ", (unsigned int)data_offset);
+        printc_panic("%02x", (unsigned)*data_addr++);
+        data_offset++;
+        if (++line_byte_ctr >= bytes_per_line) {
+            printc_panic("\n");
+            line_byte_ctr = 0;
+        }
+    }
+    if (line_byte_ctr != 0)
+        printc_panic("\n");
+    // ========================================================================
+
+    // Reset system - this function will not return
     NVIC_SystemReset();
 }
 
@@ -543,55 +634,55 @@ static void fault_common_handler()
  * @note As we are in a panic, we tend to just ignore return codes and keep
  *       going.
  */
-static void record_fault_data(uint32_t data_offset, uint8_t* data_addr,
-                              uint32_t num_bytes)
-{
-#if CONFIG_FAULT_PANIC_TO_FLASH
-    {
-        static bool do_flash;
-        int32_t rc;
+// static void record_fault_data(uint32_t data_offset, uint8_t* data_addr,
+//                               uint32_t num_bytes)
+// {
+// #if CONFIG_FAULT_PANIC_TO_FLASH
+//     {
+//         static bool do_flash;
+//         int32_t rc;
         
-        if (data_offset == 0) {
-            do_flash = ((struct fault_data*)FLASH_PANIC_DATA_ADDR)->magic !=
-                MOD_MAGIC_FAULT;
-        }
-        if (do_flash) {
-            if (data_offset == 0) {
-                rc = flash_panic_erase_page((uint32_t*)FLASH_PANIC_DATA_ADDR);
-                if (rc != 0)
-                    printc_panic("flash_panic_erase_page returns %ld\n", rc);
-            }
-            rc = flash_panic_write((uint32_t*)(FLASH_PANIC_DATA_ADDR +
-                                               data_offset),
-                                   (uint32_t*)data_addr, num_bytes);
-            if (rc != 0)
-                printc_panic("flash_panic_write returns %ld\n", rc);
-        }
-    }
-#endif
+//         if (data_offset == 0) {
+//             do_flash = ((struct fault_data*)FLASH_PANIC_DATA_ADDR)->magic !=
+//                 MOD_MAGIC_FAULT;
+//         }
+//         if (do_flash) {
+//             if (data_offset == 0) {
+//                 rc = flash_panic_erase_page((uint32_t*)FLASH_PANIC_DATA_ADDR);
+//                 if (rc != 0)
+//                     printc_panic("flash_panic_erase_page returns %ld\n", rc);
+//             }
+//             rc = flash_panic_write((uint32_t*)(FLASH_PANIC_DATA_ADDR +
+//                                                data_offset),
+//                                    (uint32_t*)data_addr, num_bytes);
+//             if (rc != 0)
+//                 printc_panic("flash_panic_write returns %ld\n", rc);
+//         }
+//     }
+// #endif
 
-#if CONFIG_FAULT_PANIC_TO_CONSOLE
-    {
-        const int bytes_per_line = 32;
-        uint32_t line_byte_ctr = 0;
-        uint32_t idx;
+// #if CONFIG_FAULT_PANIC_TO_CONSOLE
+//     {
+//         const int bytes_per_line = 32;
+//         uint32_t line_byte_ctr = 0;
+//         uint32_t idx;
 
-        for (idx = 0; idx < num_bytes; idx++) {
-            if (line_byte_ctr == 0)
-                printc_panic("%08x: ", (unsigned int)data_offset);
-            printc_panic("%02x", (unsigned)*data_addr++);
-            data_offset++;
-            if (++line_byte_ctr >= bytes_per_line) {
-                printc_panic("\n");
-                line_byte_ctr = 0;
-            }
-        }
-        if (line_byte_ctr != 0)
-            printc_panic("\n");
-    }
-#endif
+//         for (idx = 0; idx < num_bytes; idx++) {
+//             if (line_byte_ctr == 0)
+//                 printc_panic("%08x: ", (unsigned int)data_offset);
+//             printc_panic("%02x", (unsigned)*data_addr++);
+//             data_offset++;
+//             if (++line_byte_ctr >= bytes_per_line) {
+//                 printc_panic("\n");
+//                 line_byte_ctr = 0;
+//             }
+//         }
+//         if (line_byte_ctr != 0)
+//             printc_panic("\n");
+//     }
+// #endif
 
-}
+// }
 
 /*
  * @brief Callback from watchdog module in case of a trigger.

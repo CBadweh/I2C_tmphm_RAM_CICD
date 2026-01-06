@@ -271,42 +271,9 @@ int32_t flash_panic_erase_page(uint32_t* start_addr)
 
     flash_panic_op_start();
 
-#if CONFIG_FLASH_TYPE == 1 // Example: STM32L452xx 
-
-    // Select the page in FLASH->CR;
-    FLASH_CR = (FLASH_CR & (~FLASH_CR_PNB_Msk)) |
-        (page_num << FLASH_CR_PNB_Pos);
-
-    // Set the PER bit in FLASH->CR.
-    FLASH_CR |= FLASH_CR_PER_Msk;
-
-#elif CONFIG_FLASH_TYPE == 2 // Example: STM32F401xE
-
-    // Select the SER bit and sector in FLASH->CR;
+    // Select the SER bit and sector in FLASH->CR (STM32F401xE specific)
     FLASH_CR = (FLASH_CR & (~FLASH_CR_SNB_Msk)) |
         ((page_num << FLASH_CR_SNB_Pos) | FLASH_CR_SER_Msk);
-
-#elif CONFIG_FLASH_TYPE == 3 // Example: STM32F103xB
-
-    #error TODO STM32F103xB
-
-#elif CONFIG_FLASH_TYPE == 4 // Example: STM32U575xx
-
-    {
-        int32_t bank_num = addr_to_bank_num(start_addr);
-        if (bank_num < 0)
-            return bank_num;
-
-        // Select the page and bank in FLASH->CR;
-        FLASH_CR = (FLASH_CR & (~(FLASH_CR_PNB_Msk | FLASH_CR_BKER_Msk))) |
-            (FLASH_CR_PER_Msk |
-             (page_num << FLASH_CR_PNB_Pos) |
-             (bank_num << FLASH_CR_BKER_Pos));
-    }
-
-#else
-    #error Unknown procesor
-#endif
 
     // Start the erase.
     FLASH_CR |= FLASH_CR_STRT_Msk;
@@ -347,34 +314,18 @@ int32_t flash_panic_write(uint32_t* flash_addr, uint32_t* data,
     if (FLASH_SR & FLASH_SR_BSY_Msk)
         return MOD_ERR_BUSY;
 
-    #if CONFIG_FLASH_TYPE == 4
-        // A write is in progress - not expected.
-        if (FLASH_SR & FLASH_SR_WDW_Msk)
-            return MOD_ERR_PERIPH;
-    #endif
-
     flash_panic_op_start();
 
     // Set the program bit.
     FLASH_CR |= FLASH_CR_PG_Msk;
 
     for (; data_len > 0; data_len -= CONFIG_FLASH_WRITE_BYTES) {
-        // Write the data to flash.
+        // Write the data to flash (STM32F401RE writes 8 bytes = 2 words per iteration).
         *flash_addr++ = *data++;
         *flash_addr++ = *data++;
-
-        #if CONFIG_FLASH_WRITE_BYTES == 16
-            *flash_addr++ = *data++;
-            *flash_addr++ = *data++;
-        #endif
 
         // Wait until busy is cleared.
         while (FLASH_SR & FLASH_SR_BSY_Msk) {}
-
-        #if CONFIG_FLASH_TYPE == 4
-            if (FLASH_SR & FLASH_SR_WDW_Msk)
-                return MOD_ERR_PERIPH;
-        #endif
 
         // Since EOP interrupts are not enabled, we don't check/clear it.
     }
