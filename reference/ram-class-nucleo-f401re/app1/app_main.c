@@ -616,7 +616,7 @@ void app_main(void)
                 INC_SAT_U16(cnts_u16[CNT_START_ERR]);
             }
         }
-                
+
     }
 
     rc = cmd_register(&cmd_info);

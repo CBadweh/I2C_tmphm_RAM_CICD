@@ -1,4 +1,0 @@
-../modules/float/whetstone.c:64:6:whetstone	32	static
-../modules/float/whetstone.c:232:13:pa	16	static
-../modules/float/whetstone.c:248:13:p3	24	static
-../modules/float/whetstone.c:256:13:p0	4	static

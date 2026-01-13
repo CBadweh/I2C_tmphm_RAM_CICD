@@ -1,0 +1,34 @@
+pipeline {
+    agent any
+
+    environment {
+        TOOL_DIR = "${WORKSPACE}\\I2C_TmpHm_RAM_CICD\\ci-cd-tools"
+    }
+
+    stages {
+        stage('Hello') {
+            steps {
+                echo 'Hello World.'
+            }
+        }
+        stage('Build') {
+            steps {
+                echo 'Explore Build Stage.'
+                bat "\"${TOOL_DIR}\\buildi.bat\" Debug all"
+            }
+        }
+        stage('Flash') {
+            steps {
+                echo 'Explore Flash Stage.'
+                bat "\"${TOOL_DIR}\\flashi.bat\""
+            }
+        }
+        stage('Test') { 
+            steps {
+                bat "python \"${TOOL_DIR}\\badweh-hilt.py\" --verbose"
+                junit 'badweh-test-results.xml'
+                bat "\"${TOOL_DIR}\\check-test-results.bat\" badweh-test-results.xml"
+            }
+        }
+    }
+}

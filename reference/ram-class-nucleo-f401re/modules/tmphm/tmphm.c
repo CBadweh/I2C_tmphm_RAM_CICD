@@ -47,7 +47,6 @@
 #include "cmd.h"
 #include "console.h"
 #include "i2c.h"
-#include "log.h"
 #include "lwl.h"
 #include "module.h"
 #include "tmr.h"
@@ -118,21 +117,6 @@ static uint8_t crc8(const uint8_t *data, int len);
 
 static struct tmphm_state tmphm_states[TMPHM_NUM_INSTANCES];
 
-static int32_t log_level = LOG_INFO;
-
-// Storage for performance measurements.
-static uint16_t cnts_u16[NUM_U16_PMS];
-
-// Names of performance measurements.
-static const char* cnts_u16_names[NUM_U16_PMS] = {
-    "reserve fail",
-    "write init fail",
-    "write op fail",
-    "read init fail",
-    "read op fail",
-    "task overrun",
-    "crc error",
-};
 
 // Data structure with console command info.
 static struct cmd_cmd_info cmds[] = {
@@ -153,10 +137,6 @@ static struct cmd_client_info cmd_info = {
     .name = "tmphm",
     .num_cmds = ARRAY_SIZE(cmds),
     .cmds = cmds,
-    .log_level_ptr = &log_level,
-    .num_u16_pms = NUM_U16_PMS,
-    .u16_pms = cnts_u16,
-    .u16_pm_names = cnts_u16_names,
 };
 
 const char sensor_i2c_cmd[2] = {0x2c, 0x06 };
@@ -228,7 +208,6 @@ int32_t tmphm_start(enum tmphm_instance_id instance_id)
 
     rc = cmd_register(&cmd_info);
     if (rc < 0) {
-        log_error("tmphm_start: cmd error %d\n", rc);
         return rc;
     }
 
@@ -243,7 +222,6 @@ int32_t tmphm_start(enum tmphm_instance_id instance_id)
 
     rc = wdg_register(CONFIG_TMPHM_WDG_ID, CONFIG_TMPHM_WDG_MS);
     if (rc < 0) {
-        log_error("tmphm_start: wdg error %d\n", rc);
         return rc;
     }
     
@@ -286,12 +264,11 @@ int32_t tmphm_run(enum tmphm_instance_id instance_id)
                 if (rc == 0) {
                     st->state = STATE_WRITE_MEAS_CMD;
                 } else {
-                    INC_SAT_U16(cnts_u16[CNT_WRITE_INIT_FAIL]);
                     i2c_release(st->cfg.i2c_instance_id);
                     st->state = STATE_IDLE;
                 }
             } else {
-                INC_SAT_U16(cnts_u16[CNT_RESERVE_FAIL]);
+            	printc("CNT_RESERVE_FAIL");
             }
             break;
 
@@ -303,7 +280,6 @@ int32_t tmphm_run(enum tmphm_instance_id instance_id)
                     st->state = STATE_WAIT_MEAS;
                 } else {
                     LWL("i2c_get_op_status() for tmphm fails rc=%d", 4, LWL_4(rc));
-                    INC_SAT_U16(cnts_u16[CNT_WRITE_OP_FAIL]);
                     i2c_release(st->cfg.i2c_instance_id);
                     st->state = STATE_IDLE;
                 }
@@ -318,7 +294,6 @@ int32_t tmphm_run(enum tmphm_instance_id instance_id)
                     st->state = STATE_READ_MEAS_VALUE;
                 } else {
                     LWL("i2c_read() for tmphm fails rc=%d", 4, LWL_4(rc));
-                    INC_SAT_U16(cnts_u16[CNT_READ_INIT_FAIL]);
                     i2c_release(st->cfg.i2c_instance_id);
                     st->state = STATE_IDLE;
                 }
@@ -334,7 +309,8 @@ int32_t tmphm_run(enum tmphm_instance_id instance_id)
 
                     if (crc8(&msg[0], 2) != msg[2] ||
                         crc8(&msg[3], 2) != msg[5]) {
-                        INC_SAT_U16(cnts_u16[CNT_CRC_FAIL]);
+                        printc("CNT_CRC_FAIL");
+
                     } else {
                         LWL("Got good tmphm measurement", 0);
                         wdg_feed(CONFIG_TMPHM_WDG_ID);
@@ -347,13 +323,11 @@ int32_t tmphm_run(enum tmphm_instance_id instance_id)
                         st->last_meas.rh_percent_x10 = hum;
                         st->last_meas_ms = tmr_get_ms();
                         st->got_meas = true;
-                        log_info("temp=%ld degC*10 hum=%d %%*10\n",
-                                 temp, hum);
                     }
                     
                 } else {
                     LWL("i2c_get_op_status() for tmphm fails rc=%d", 4, LWL_4(rc));
-                    INC_SAT_U16(cnts_u16[CNT_READ_OP_FAIL]);
+                    printc("CNT_READ_OP_FAIL");
                 }
                 i2c_release(st->cfg.i2c_instance_id);
                 st->state = STATE_IDLE;
@@ -402,7 +376,7 @@ static enum tmr_cb_action tmr_callback(int32_t tmr_id, uint32_t user_data)
     enum tmphm_instance_id instance_id = (enum tmphm_instance_id)user_data;
     struct tmphm_state* st;
 
-    log_verbose("tmr_callback(tmr_id=%d user_data=%lu)\n", tmr_id, user_data);
+
     if (instance_id >= TMPHM_NUM_INSTANCES)
         return TMR_CB_RESTART;
 
@@ -412,7 +386,6 @@ static enum tmr_cb_action tmr_callback(int32_t tmr_id, uint32_t user_data)
         LWL("Start tmphm measurement", 0);
     } else {
         LWL("Start tmphm measurement fails due to state %d", 1, LWL_1(st->state));
-        INC_SAT_U16(cnts_u16[CNT_TASK_OVERRUN]);
     }
     return TMR_CB_RESTART;
 }

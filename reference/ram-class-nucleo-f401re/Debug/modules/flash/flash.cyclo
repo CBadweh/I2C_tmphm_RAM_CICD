@@ -1,9 +1,0 @@
-../modules/flash/flash.c:235:9:flash_start	4
-../modules/flash/flash.c:259:9:flash_panic_erase_page	7
-../modules/flash/flash.c:338:9:flash_panic_write	8
-../modules/flash/flash.c:397:13:flash_unlock	2
-../modules/flash/flash.c:410:13:flash_panic_op_start	3
-../modules/flash/flash.c:457:13:flash_panic_op_complete	3
-../modules/flash/flash.c:502:16:addr_to_page_num	3
-../modules/flash/flash.c:577:16:cmd_flash_erase	2
-../modules/flash/flash.c:601:16:cmd_flash_write	3

@@ -1,9 +1,0 @@
-../modules/lwl/lwl.c:146:9:lwl_start	4
-../modules/lwl/lwl.c:162:6:lwl_rec	4
-../modules/lwl/lwl.c:196:6:lwl_enable	1
-../modules/lwl/lwl.c:208:10:lwl_get_buffer	1
-../modules/lwl/lwl.c:222:13:prepare_data_for_output	1
-../modules/lwl/lwl.c:239:16:cmd_lwl_status	1
-../modules/lwl/lwl.c:255:16:cmd_lwl_test	5
-../modules/lwl/lwl.c:276:16:cmd_lwl_enable	3
-../modules/lwl/lwl.c:304:16:cmd_lwl_dump	1

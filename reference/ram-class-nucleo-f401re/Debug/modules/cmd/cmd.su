@@ -1,6 +1,0 @@
-../modules/cmd/cmd.c:142:9:cmd_init	16	static
-../modules/cmd/cmd.c:157:9:cmd_register	24	static
-../modules/cmd/cmd.c:181:9:cmd_execute	104	static
-../modules/cmd/cmd.c:427:9:cmd_parse_args	56	static
-../modules/cmd/cmd.c:545:20:log_level_str	16	static
-../modules/cmd/cmd.c:560:16:log_level_int	24	static

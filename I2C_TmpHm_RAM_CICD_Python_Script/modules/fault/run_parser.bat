@@ -1,0 +1,6 @@
+@echo off
+echo Running fault data parser...
+python logfmt_simple.py ..\..\raw.txt
+echo.
+echo Press any key to exit...
+pause > nul

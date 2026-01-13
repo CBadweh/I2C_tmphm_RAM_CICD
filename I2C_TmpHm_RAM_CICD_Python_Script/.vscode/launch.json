@@ -1,0 +1,25 @@
+{
+    "configurations": [
+        {
+            "name": "Python Debugger: logfmt.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/modules/fault/logfmt.py",
+            "args": [
+                "-d",
+                "..",
+                "-f",
+                "raw2_console.txt"
+            ],
+            "cwd": "${workspaceFolder}/modules/fault",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "Python Debugger: Python File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}"
+        }
+    ]
+}

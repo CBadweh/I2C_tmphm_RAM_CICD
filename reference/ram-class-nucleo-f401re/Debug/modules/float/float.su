@@ -1,7 +1,0 @@
-../modules/float/float.c:115:9:float_get_def_cfg	16	static
-../modules/float/float.c:131:9:float_init	16	static
-../modules/float/float.c:143:9:float_start	16	static
-../modules/float/float.c:164:9:float_run	4	static
-../modules/float/float.c:173:12:float_test	40	static
-../modules/float/float.c:194:16:cmd_float_status	16	static
-../modules/float/float.c:210:16:cmd_float_test	72	static
